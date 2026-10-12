@@ -109,7 +109,9 @@ def capacidade() -> pd.DataFrame | None:
 
 def climatologia(cliente, muns, log, pausa=2.0) -> dict:
     arq = C.DIR_REF / "climatologia.json"
-    d = _ler_json(arq) or {"periodo": [C.CLIMATOLOGIA_INICIO, C.CLIMATOLOGIA_FIM], "municipios": {}}
+    d = _ler_json(arq)
+    if not d or d.get("modelo") != F.MODELO_REANALISE:   # refaz se a referência veio de outro modelo
+        d = {"periodo": [C.CLIMATOLOGIA_INICIO, C.CLIMATOLOGIA_FIM], "modelo": F.MODELO_REANALISE, "municipios": {}}
     faltam = [m for m in muns if m["cod_ibge"] not in d["municipios"]]
     for i, m in enumerate(faltam):
         log(f"  climatologia ERA5 {C.CLIMATOLOGIA_INICIO[:4]}-{C.CLIMATOLOGIA_FIM[:4]}: {m['nome']}")
@@ -292,7 +294,7 @@ def exportar(ind: pd.DataFrame, muns, cen, estr, clim, vies, hoje: date, modo: s
         "data_referencia": hoje.isoformat(), "anos": anos,
         "ultima_data_era5": era5.max().strftime("%Y-%m-%d") if not era5.empty else None,
         "ultima_data_previsao": ind["data"].max().strftime("%Y-%m-%d"),
-        "climatologia": {"periodo": clim["periodo"], "fonte": "ERA5 via Open-Meteo"},
+        "climatologia": {"periodo": clim["periodo"], "fonte": "ERA5 (Copernicus/ECMWF) via Open-Meteo"},
         "pesos": ind.attrs.get("pesos"), "capacidade_disponivel": ind.attrs.get("capacidade_disponivel"),
         "limiar": C.LIMIAR_ACAO, "vies_modelo": vies, "avisos": avisos,
         "fontes": [

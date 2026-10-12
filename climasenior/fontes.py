@@ -78,7 +78,9 @@ def _diario_para_df(obj: dict, chave: str) -> pd.DataFrame:
         raise ErroFonte("Resposta do Open-Meteo sem bloco 'daily'")
     df = pd.DataFrame({"data": pd.to_datetime(d["time"])})
     for v in VARIAVEIS_DIARIAS:
-        df[v] = pd.to_numeric(pd.Series(d.get(v, [None] * len(df))), errors="coerce")
+        # com um modelo explícito a chave pode vir com sufixo (ex.: temperature_2m_max_era5)
+        chave_v = v if v in d else next((k for k in d if k.startswith(v + "_")), None)
+        df[v] = pd.to_numeric(pd.Series(d[chave_v] if chave_v else [None] * len(df)), errors="coerce")
     df.insert(0, "chave", chave)
     return df.rename(columns={"temperature_2m_max": "tmax", "temperature_2m_min": "tmin",
                               "apparent_temperature_max": "tapmax"})
@@ -90,9 +92,12 @@ def _parametros_base(locais: list[dict], fuso: str) -> dict:
             "daily": ",".join(VARIAVEIS_DIARIAS), "timezone": fuso}
 
 
+MODELO_REANALISE = "era5"   # ERA5 puro: sem ele, o arquivo completa os dias recentes com o modelo operacional
+
+
 def baixar_reanalise(cliente, locais: list[dict], inicio: str, fim: str, fuso: str) -> pd.DataFrame:
-    """ERA5 (arquivo histórico do Open-Meteo) para várias localidades."""
-    p = _parametros_base(locais, fuso) | {"start_date": inicio, "end_date": fim}
+    """ERA5 (arquivo histórico do Open-Meteo) para várias localidades. Dias ainda sem ERA5 vêm nulos."""
+    p = _parametros_base(locais, fuso) | {"start_date": inicio, "end_date": fim, "models": MODELO_REANALISE}
     objs = _lista(cliente.get_json(OPEN_METEO_ARQUIVO, p))
     if len(objs) != len(locais):
         raise ErroFonte(f"ERA5: esperadas {len(locais)} localidades, recebidas {len(objs)}")

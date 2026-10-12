@@ -166,3 +166,13 @@ def test_painel_usa_campos_exportados():
     for campo in ("data_referencia", "ultima_data_era5", "ultima_data_previsao", "ivc_max_horizonte",
                   "dia_pico", "climatologia", "pop60", "serie_${ano}.json", "atual.json", "meta.json"):
         assert campo in html, campo
+
+
+def test_open_meteo_chave_com_sufixo_do_modelo():
+    class C:
+        def get_json(self, url, params=None):
+            assert params.get("models") == "era5"
+            return {"daily": {"time": ["2026-01-01"], "temperature_2m_max_era5": [31.0],
+                              "temperature_2m_min_era5": [24.0], "apparent_temperature_max_era5": [35.0]}}
+    df = F.baixar_reanalise(C(), [{"cod_ibge": "1", "lat": 0, "lon": 0}], "2026-01-01", "2026-01-01", "UTC")
+    assert df.loc[0, "tmax"] == 31.0 and df.loc[0, "tmin"] == 24.0
