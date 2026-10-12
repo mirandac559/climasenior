@@ -61,6 +61,7 @@ PRIORIDADE_FONTE = {"cpc": 0, "modelo": 1}
 class Pastas:
     def __init__(self, base: Path, site: Path):
         self.ref, self.clima, self.prev, self.log = base / "ref", base / "clima", base / "previsao", base / "log"
+        self.validacao = base / "validacao"
         self.site = site
         for p in (self.ref, self.clima, self.prev, self.log, self.site):
             p.mkdir(parents=True, exist_ok=True)
@@ -460,6 +461,35 @@ def capacidade(m: pd.DataFrame, P: Pastas) -> np.ndarray | None:
     return (1 - np.clip(taxa / q, 0, 1)).fillna(0.5).to_numpy()
 
 
+def exposicao(t: pd.DataFrame, ref: pd.DataFrame) -> dict:
+    """
+    Componente de exposição a partir da temperatura média diária t (dias x células) e da
+    climatologia de cada célula (p50, p95, ehf85). Usado na operação diária e na validação.
+    """
+    t3 = (t + t.shift(-1) + t.shift(-2)) / 3
+    t30 = t.shift(1).rolling(30, min_periods=24).mean()
+    p50, p95, e85 = ref["p50"].to_numpy(), ref["p95"].to_numpy(), ref["ehf85"].to_numpy()
+    sig = t3 - p95
+    accl = t3 - t30
+    with np.errstate(invalid="ignore"):
+        ehf = sig * np.maximum(1.0, accl)
+    sev = (ehf / e85).where(ehf > 0, 0.0).where(ehf.notna())
+    frac = ((t3 - p50) / (p95 - p50)).clip(0, 1)
+    with np.errstate(invalid="ignore"):
+        E = (0.5 + 0.5 * np.minimum(sev / 3, 1)).where(ehf > 0, 0.5 * frac).where(ehf.notna())
+    return {"t3": t3, "ehf": ehf, "sev": sev, "E": E}
+
+
+def pesos_ivc(m: pd.DataFrame, P: Pastas):
+    """Pesos em uso e capacidade de resposta (None quando o arquivo do CNES não existe)."""
+    w = dict(C.PESOS_IVC)
+    Cc = capacidade(m, P)
+    if Cc is None:
+        tot = w["exposicao"] + w["sensibilidade"]
+        w = {"exposicao": w["exposicao"] / tot, "sensibilidade": w["sensibilidade"] / tot, "capacidade": 0.0}
+    return w, Cc
+
+
 def calcular(cel: pd.DataFrame, m: pd.DataFrame, vies: pd.DataFrame, P: Pastas, hoje: date) -> dict:
     d0 = date(C.ANO_INICIO_OPERACIONAL, 1, 1) - timedelta(days=31)
     obs = ler_dias(P, d0, hoje - timedelta(days=1))
@@ -483,27 +513,14 @@ def calcular(cel: pd.DataFrame, m: pd.DataFrame, vies: pd.DataFrame, P: Pastas, 
     tn = tn - modelo * v["vies_tmin"].fillna(0).to_numpy()
 
     t = (tx + tn) / 2
-    t3 = (t + t.shift(-1) + t.shift(-2)) / 3
-    t30 = t.shift(1).rolling(30, min_periods=24).mean()
-    ref = cel.set_index("celula").reindex(cols)
-    p50, p95, e85 = ref["p50"].to_numpy(), ref["p95"].to_numpy(), ref["ehf85"].to_numpy()
-    sig = t3 - p95
-    accl = t3 - t30
-    with np.errstate(invalid="ignore"):
-        ehf = sig * np.maximum(1.0, accl)
-    sev = (ehf / e85).where(ehf > 0, 0.0).where(ehf.notna())
-    frac = ((t3 - p50) / (p95 - p50)).clip(0, 1)
-    with np.errstate(invalid="ignore"):
-        E = (0.5 + 0.5 * np.minimum(sev / 3, 1)).where(ehf > 0, 0.5 * frac).where(ehf.notna())
+    x = exposicao(t, cel.set_index("celula").reindex(cols))
+    t3, ehf, sev, E = x["t3"], x["ehf"], x["sev"], x["E"]
     quente = (ehf > 0).astype(int)
     consec = _consecutivos(quente)
 
-    w = dict(C.PESOS_IVC)
     S = sensibilidade(m)
-    Cc = capacidade(m, P)
+    w, Cc = pesos_ivc(m, P)
     if Cc is None:
-        tot = w["exposicao"] + w["sensibilidade"]
-        w = {"exposicao": w["exposicao"] / tot, "sensibilidade": w["sensibilidade"] / tot, "capacidade": 0.0}
         Cc = np.zeros(len(m))
     idx = pd.Index(cols).get_indexer(m["celula"])
     Em = E.to_numpy(dtype=float)[:, np.where(idx >= 0, idx, 0)]
@@ -573,6 +590,10 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
 
     if (P.ref / "ufs.json").exists():
         (site / "ufs.json").write_text((P.ref / "ufs.json").read_text(encoding="utf-8"), encoding="utf-8")
+    if (P.validacao / "resultados.json").exists():          # validação retrospectiva (SIH/DataSUS)
+        import shutil
+        shutil.rmtree(site / "validacao", ignore_errors=True)
+        shutil.copytree(P.validacao, site / "validacao", ignore=shutil.ignore_patterns("*.npz", "*.parquet", "sih*"))
     vies = extra.get("vies")
     _gravar_json(site / "meta.json", {
         "versao": __version__, "modo": modo, "abrangencia": "Brasil",

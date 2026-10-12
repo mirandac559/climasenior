@@ -1,0 +1,4 @@
+# Validação retrospectiva (GitHub Actions): operação + leitura do SIH/DataSUS
+-r requirements-operacional.txt
+pyreaddbc>=2.0
+pyarrow>=15
