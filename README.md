@@ -1,6 +1,6 @@
 # ClimaSênior
 
-Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa nos **5.570 municípios
+Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa nos **5.571 municípios
 do Brasil**, atualizado todos os dias desde 1º de janeiro de 2026. O painel mostra a situação do dia,
 a previsão para os próximos dias, a série de cada município e a conduta do protocolo de resposta graduada.
 
