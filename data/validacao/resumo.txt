@@ -1,12 +1,14 @@
-Sensíveis ao calor: 2.217.083 internações; dias em alerta 2.14%; RR 1.17 (1.152-1.188); excesso/ano 602.0
-   faixas: BAIXA 1.0 (None-None); MODERADA 1.069 (1.063-1.075); ALTA 1.224 (1.197-1.254); MUITO ALTA 1.331 (1.239-1.434)
-   defasagens: L0 1.134; L1 1.185; L2 1.215; L3 1.204; L4 1.17; L5 1.129; L6 1.098; L7 1.078
-Aparelho circulatório: 7.324.158 internações; dias em alerta 2.14%; RR 0.99 (0.983-0.997); excesso/ano -104.0
-   faixas: BAIXA 1.0 (None-None); MODERADA 0.999 (0.996-1.002); ALTA 0.997 (0.986-1.009); MUITO ALTA 0.977 (0.948-1.006)
-   defasagens: L0 0.99; L1 0.981; L2 0.979; L3 0.968; L4 0.966; L5 0.974; L6 0.979; L7 0.977
-Aparelho respiratório: 4.872.606 internações; dias em alerta 2.14%; RR 1.086 (1.076-1.095); excesso/ano 562.0
-   faixas: BAIXA 1.0 (None-None); MODERADA 1.028 (1.023-1.032); ALTA 1.116 (1.102-1.128); MUITO ALTA 1.179 (1.125-1.237)
-   defasagens: L0 1.068; L1 1.096; L2 1.107; L3 1.093; L4 1.07; L5 1.052; L6 1.043; L7 1.021
-Todas as causas clínicas: 27.392.662 internações; dias em alerta 2.14%; RR 1.041 (1.036-1.046); excesso/ano 1622.0
-   faixas: BAIXA 1.0 (None-None); MODERADA 1.02 (1.018-1.022); ALTA 1.06 (1.053-1.066); MUITO ALTA 1.071 (1.037-1.103)
-   defasagens: L0 1.033; L1 1.042; L2 1.047; L3 1.037; L4 1.026; L5 1.02; L6 1.015; L7 1.006
+Sensíveis ao calor: 2.217.083 internações; dias em alerta 0.56%; RR 1.229 (1.203-1.26); excesso/ano 287.0
+   faixas: BAIXA 1.0 (None-None); MODERADA 1.081 (1.074-1.089); ALTA 1.303 (1.271-1.34); MUITO ALTA 1.095 (1.042-1.269)
+   defasagens: L0 1.172; L1 1.224; L2 1.303; L3 1.271; L4 1.241; L5 1.183; L6 1.143; L7 1.117
+Aparelho circulatório: 7.324.158 internações; dias em alerta 0.56%; RR 0.98 (0.97-0.99); excesso/ano -69.0
+   faixas: BAIXA 1.0 (None-None); MODERADA 0.996 (0.992-0.999); ALTA 0.985 (0.969-1.0); MUITO ALTA 0.913 (0.869-1.095)
+   defasagens: L0 0.987; L1 0.973; L2 0.961; L3 0.954; L4 0.964; L5 0.973; L6 0.976; L7 0.978
+Aparelho respiratório: 4.872.606 internações; dias em alerta 0.56%; RR 1.132 (1.116-1.149); excesso/ano 279.0
+   faixas: BAIXA 1.0 (None-None); MODERADA 1.036 (1.032-1.041); ALTA 1.165 (1.145-1.185); MUITO ALTA 1.078 (0.978-1.456)
+   defasagens: L0 1.108; L1 1.133; L2 1.162; L3 1.146; L4 1.124; L5 1.087; L6 1.082; L7 1.047
+Todas as causas clínicas: 27.392.662 internações; dias em alerta 0.56%; RR 1.053 (1.045-1.062); excesso/ano 707.0
+   faixas: BAIXA 1.0 (None-None); MODERADA 1.021 (1.019-1.023); ALTA 1.072 (1.061-1.082); MUITO ALTA 0.958 (0.921-1.088)
+   defasagens: L0 1.042; L1 1.048; L2 1.06; L3 1.055; L4 1.047; L5 1.037; L6 1.029; L7 1.016
+Demanda todas (teste 2025): D² -5419.390 (sem clima -5419.390); MAE UF-dia 2473933.7; MAPE UF-dia 143244.2%; dias altos F1 0.21; razão nos dias de alerta 0.000 (sem clima 0.000)
+Demanda calor (teste 2025): D² -2423987.802 (sem clima -2423987.808); MAE UF-dia 191230464.8; MAPE UF-dia 103237512.9%; dias altos F1 0.17; razão nos dias de alerta 0.000 (sem clima 0.000)
