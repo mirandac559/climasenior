@@ -3,3 +3,5 @@ pandas>=2.2
 numpy>=1.26
 requests>=2.31
 netCDF4>=1.6
+# modelo de demanda: a versão precisa ser a mesma do treino (modelos/)
+scikit-learn==1.9.1

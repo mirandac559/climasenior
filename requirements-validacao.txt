@@ -1,4 +1,4 @@
-# Validação retrospectiva (GitHub Actions): operação + leitura do SIH/DataSUS
+# Validação retrospectiva (GitHub Actions): operação + leitura do SIH/CNES + modelo de demanda
 -r requirements-operacional.txt
 pyreaddbc>=2.0
 pyarrow>=15
