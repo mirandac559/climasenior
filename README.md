@@ -53,6 +53,32 @@ Teste sem rede, com dados e municípios fictícios: `python -m climasenior.brasi
 
 Testes: `pip install pytest scikit-learn joblib && python -m pytest tests -q`
 
+## Validação retrospectiva (Fase 3)
+
+O IVC de cada dia de 2014 a 2025 é recalculado para todos os municípios, com a mesma fórmula do
+painel e a temperatura observada da CPC, e comparado com as internações de urgência de pessoas com
+60 anos ou mais no SIH/DataSUS (arquivos RD de todas as UFs, competências 2014 em diante), por
+município de residência e data de internação. Grupos de causa: sensíveis ao calor (E86–E87, N17,
+N19, N39.0, A40–A41, T67, X30; Bobb et al., JAMA 2014), circulatórias, respiratórias e todas as
+causas clínicas.
+
+Desenho: série temporal estratificada no tempo (município × ano × mês × dia da semana; Janes et al.,
+2005). Um dia está em alerta quando o IVC do dia ou de um dos dois anteriores atinge o limiar.
+Medida: razão de taxas de Mantel-Haenszel, com intervalo de 95% por bootstrap de municípios (de
+município-ano nas UFs com menos de 30 municípios); internações a mais = internações nos dias de
+alerta × (1 − 1/razão). Também por faixa do IVC, por dia após o alerta (0 a 7), por limiar (40 a 80),
+por UF e por região. Os resultados aparecem na aba Validação do painel.
+
+O fluxo `.github/workflows/validacao.yml` é disparado à mão: vazio roda o Brasil inteiro (cerca de
+1h20, em paralelo por ano); `piloto = "MA 2024"` testa um estado e um ano; `reusar = <execução>`
+refaz só a análise com as internações já baixadas. Localmente:
+
+```bash
+pip install -r requirements-validacao.txt
+python -m climasenior.validacao sih --ano 2024 --ufs MA --saida sih
+python -m climasenior.validacao analisar --sih sih --ufs MA --anos 2024
+```
+
 ## Publicação
 
 O fluxo `.github/workflows/atualizar.yml` roda às 06:00 de Brasília, a cada 2 horas para lacunas e a
@@ -68,6 +94,8 @@ climasenior/brasil.py        operação nacional (orquestração, EHF, IVC, expo
 climasenior/cpc.py           leitura da CPC (NetCDF)
 climasenior/fontes.py        conectores IBGE, Open-Meteo e coordenadas
 climasenior/ehf.py           Fator de Excesso de Calor
+climasenior/sih.py           internações do SIH/DataSUS (download, leitura e agregação)
+climasenior/validacao.py     validação retrospectiva do IVC (2014-2025)
 climasenior/simulacao_br.py  respostas simuladas para testes
 site/index.html              painel
 site/img/                    logos dos apoiadores (Itaú Viver Mais; Portal do Envelhecimento e Longeviver)
@@ -79,4 +107,4 @@ climasenior/modelos.py, backtesting.py, api/, app/   módulos de pesquisa (0.3)
 
 O índice descreve municípios, não pessoas. A resolução de 0,5° não distingue bairros nem ilhas de
 calor urbanas. Na Amazônia a CPC se apoia em poucas estações. Os limiares ainda serão calibrados com
-internações e óbitos do DataSUS, que chegam com meses de atraso, e pactuados com os gestores.
+óbitos do SIM e pactuados com os gestores; a validação com internações está na aba Validação.
