@@ -184,20 +184,18 @@ def resumir(pm: dict, idx: np.ndarray, boot: np.ndarray, anos: float, por_ano: b
             "dias_pct": dias_pct, "internacoes_em_alerta": int(round(n_exp))}
 
 
-def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.DataFrame, P: B.Pastas,
-             sih: pd.DataFrame, resumo_sih: dict, inicio: date = INICIO, fim: date = FIM, ufs=None,
-             n_boot: int = N_BOOT, log=print) -> tuple[dict, dict]:
+def matrizes(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.DataFrame, P: B.Pastas,
+             sih: pd.DataFrame, inicio: date = INICIO, fim: date = FIM, log=print) -> dict:
+    """IVC diário por município (mesma fórmula, pesos e arredondamento do painel) e internações dia x município."""
     t0 = time.time()
-    rng = np.random.default_rng(20261012)
     m = m.reset_index(drop=True)
     cel_idx = pd.Index(cels).get_indexer(m["celula"].astype(str))
-    w, _ = B.pesos_ivc(m, P)
+    w, Cc = B.pesos_ivc(m, P)
     S = B.sensibilidade(m).astype(np.float32)
-    # IVC diário por município (mesma fórmula, pesos e arredondamento do painel)
+    Cc = np.zeros(len(m), dtype=np.float32) if Cc is None else np.asarray(Cc, dtype=np.float32)
     Em = E_cel[:, np.where(cel_idx >= 0, cel_idx, 0)].astype(np.float32)
     Em[:, cel_idx < 0] = np.nan
-    ivc = np.round(100 * (w["exposicao"] * Em + w["sensibilidade"] * S[None, :]))
-    del Em
+    ivc = np.round(100 * (w["exposicao"] * Em + w["sensibilidade"] * S[None, :] + w["capacidade"] * Cc[None, :]))
     dias_todos = pd.DatetimeIndex(datas)
     k0, k1 = dias_todos.get_loc(pd.Timestamp(inicio)), dias_todos.get_loc(pd.Timestamp(fim))
     dias = dias_todos[k0:k1 + 1]
@@ -228,6 +226,24 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
         A = np.zeros((nd, nm), dtype=np.int32)
         A[ri[casou], ci[casou].astype(int)] = sih.loc[casou, g].to_numpy()
         Y[g] = A
+    return {"m": m, "w": w, "S": S, "C": Cc, "Em": Em, "ivc": ivc, "dias_todos": dias_todos, "k0": k0, "k1": k1,
+            "dias": dias, "X": X, "valido": valido, "Y": Y, "fora_mun": fora_mun, "anos": anos}
+
+
+def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.DataFrame, P: B.Pastas,
+             sih: pd.DataFrame, resumo_sih: dict, inicio: date = INICIO, fim: date = FIM, ufs=None,
+             n_boot: int = N_BOOT, log=print, M: dict | None = None) -> tuple[dict, dict]:
+    t0 = time.time()
+    rng = np.random.default_rng(20261012)
+    M = M or matrizes(E_cel, datas, cels, m, P, sih, inicio, fim, log)
+    m, w, ivc, k0, k1, dias, X, valido, Y, fora_mun, anos = (M[k] for k in (
+        "m", "w", "ivc", "k0", "k1", "dias", "X", "valido", "Y", "fora_mun", "anos"))
+    inicio = dias[0].date()
+    nd, nm = len(dias), len(m)
+
+    def defasado(L):
+        return ivc[k0 - L:k1 + 1 - L]
+
     sel = np.ones(nm, dtype=bool) if not ufs else m["uf"].isin(ufs).to_numpy()
     log(f"  internações 60+ (urgência) no período: " +
         ", ".join(f"{g} {int(Y[g][:, sel].sum()):,}".replace(",", ".") for g in SIH.GRUPOS) +
