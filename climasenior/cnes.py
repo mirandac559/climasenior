@@ -83,10 +83,38 @@ def coletar(m: pd.DataFrame, fonte=None, descompactar=SIH.descomprimir, log=prin
     return out[["cod_ibge", "estab_atencao_basica", "competencia"]]
 
 
+def explorar(grupo: str, uf: str):
+    """Mostra colunas e valores frequentes de um arquivo do CNES (diagnóstico do layout)."""
+    fonte = SIH.FTPDataSUS(pasta=f"/dissemin/publicos/CNES/200508_/Dados/{grupo}")
+    nomes = fonte.listar(grupo)
+    aamm = competencia_recente(nomes) if grupo == "ST" else max(
+        (n.upper()[len(grupo) + 2:len(grupo) + 6] for n in nomes if n.upper().startswith(grupo + uf)),
+        key=lambda x: (int(x[:2]), int(x[2:])))
+    with tempfile.TemporaryDirectory() as tmp:
+        dbc, dbf = os.path.join(tmp, "a.dbc"), os.path.join(tmp, "a.dbf")
+        nome = f"{grupo}{uf}{aamm}.dbc"
+        fonte.baixar(nome, dbc)
+        SIH.descomprimir(dbc, dbf)
+        col = SIH.ler_dbf(dbf)
+    linhas = [f"{nome}: {len(next(iter(col.values())))} registros; colunas: {', '.join(col)}"]
+    for c, v in col.items():
+        vc = pd.Series(v).str.decode("latin1").str.strip().value_counts()
+        if 1 < len(vc) <= 60:
+            linhas.append(f"{c}: " + "; ".join(f"{k}={n}" for k, n in vc.head(25).items()))
+    texto = "\n".join(linhas)
+    print(texto)
+    from .validacao import aviso_actions
+    aviso_actions(f"CNES {grupo} {uf}", texto)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Capacidade de resposta (CNES) por município")
     ap.add_argument("--saida", default=str(C.DIR_DADOS / "ref" / "capacidade.csv"))
+    ap.add_argument("--explorar", help="ex.: EP:MA mostra o layout do arquivo de equipes do Maranhão")
     a = ap.parse_args()
+    if a.explorar:
+        g, uf = a.explorar.split(":")
+        return explorar(g, uf)
     m = pd.read_csv(C.DIR_DADOS / "ref" / "municipios_br.csv", dtype={"cod_ibge": str})
     cap = coletar(m)
     cap.to_csv(a.saida, sep=";", index=False)

@@ -6,6 +6,10 @@ on:
   schedule:
     - cron: "0 10 15 2 *"
   workflow_dispatch:
+    inputs:
+      explorar:
+        description: "Diagnóstico do layout (ex.: EP:MA); vazio = atualizar a capacidade"
+        default: ""
 
 permissions:
   contents: write
@@ -27,8 +31,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-validacao.txt
       - run: pip install -r requirements-validacao.txt
-      - run: python -m climasenior.cnes
+      - if: inputs.explorar != ''
+        run: python -m climasenior.cnes --explorar "${{ inputs.explorar }}"
+      - if: inputs.explorar == ''
+        run: python -m climasenior.cnes
       - name: Registrar e republicar o painel
+        if: inputs.explorar == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
