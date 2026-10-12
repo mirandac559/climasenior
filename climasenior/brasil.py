@@ -450,15 +450,17 @@ def sensibilidade(m: pd.DataFrame) -> np.ndarray:
 
 
 def capacidade(m: pd.DataFrame, P: Pastas) -> np.ndarray | None:
+    """1 - cobertura da atenção primária (CNES); None sem o arquivo ou com cobertura incompleta."""
     arq = P.ref / "capacidade.csv"
     if not arq.exists():
         return None
     cap = pd.read_csv(arq, sep=";", dtype={"cod_ibge": str})
-    taxa = m["cod_ibge"].map(dict(zip(cap["cod_ibge"], cap["estab_atencao_basica"]))) / m["populacao"] * 1e4
-    if taxa.notna().mean() < 0.9:
+    if "cobertura_aps" not in cap.columns:
         return None
-    q = np.nanpercentile(taxa, 99)
-    return (1 - np.clip(taxa / q, 0, 1)).fillna(0.5).to_numpy()
+    cob = m["cod_ibge"].astype(str).map(dict(zip(cap["cod_ibge"], cap["cobertura_aps"])))
+    if cob.notna().mean() < 0.9:
+        return None
+    return (1 - cob.clip(0, 1)).fillna(0.5).to_numpy(dtype=float)
 
 
 def exposicao(t: pd.DataFrame, ref: pd.DataFrame) -> dict:

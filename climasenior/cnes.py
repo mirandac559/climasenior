@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Capacidade de resposta: estabelecimentos de atenção básica vinculados ao SUS por município
-(CNES/DataSUS), terceiro componente do IVC (15%).
+Capacidade de resposta: cobertura da atenção primária por equipes de Saúde da Família e de
+Atenção Primária (CNES/DataSUS), terceiro componente do IVC (15%).
 
-Fonte: arquivos ST (estabelecimentos), um por UF e mês de competência, em
-ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Dados/ST/ST{UF}{AA}{MM}.dbc
-Conta-se, para a competência mais recente disponível em todas as UFs, os estabelecimentos
-com vínculo SUS dos tipos posto de saúde (01), centro de saúde/unidade básica (02), unidade
-mista (15) e unidade móvel fluvial (32). O índice usa a taxa por 10 mil habitantes: quanto
-menor a taxa, menor a capacidade e maior a vulnerabilidade.
+As equipes de Saúde da Família fazem a busca ativa e o cuidado domiciliar de idosos que o
+protocolo de resposta prevê; onde a cobertura é baixa, a capacidade de resposta ao calor é menor.
+
+Fonte: arquivos EP (equipes), um por UF e mês de competência, em
+ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Dados/EP/EP{UF}{AA}{MM}.dbc
+Para a competência mais recente disponível em todas as UFs, contam-se as equipes ativas
+(sem data de desativação) de Saúde da Família (tipo 70) e de Atenção Primária (tipo 76).
+Cobertura estimada, como no indicador do Ministério da Saúde: (eSF x 3.450 + eAP x 3.000)
+pessoas / população, limitada a 100%. No IVC, capacidade = 1 - cobertura.
 
 Uso: python -m climasenior.cnes          (grava data/ref/capacidade.csv)
 """
@@ -25,71 +28,74 @@ import pandas as pd
 from . import config as C
 from . import sih as SIH
 
-DIR_ST = "/dissemin/publicos/CNES/200508_/Dados/ST"
-TIPOS_AB = {"01": "posto de saúde", "02": "centro de saúde/unidade básica", "15": "unidade mista",
-            "32": "unidade móvel fluvial"}
+DIR_CNES = "/dissemin/publicos/CNES/200508_/Dados"
+TIPOS = {"70": ("esf", 3450), "76": ("eap", 3000)}
+ATIVA = {"", "900001", "000000"}
 
 
-def agregar_st(caminho) -> pd.DataFrame:
-    col = SIH.ler_dbf(caminho, ["CODUFMUN", "TP_UNID", "VINC_SUS"])
+def agregar_ep(caminho) -> pd.DataFrame:
+    col = SIH.ler_dbf(caminho, ["CODUFMUN", "TIPO_EQP", "DT_DESAT", "IDEQUIPE"])
     n = len(col["CODUFMUN"])
-    mun = SIH._texto(col["CODUFMUN"], n).str[:6]
-    tipo = SIH._texto(col["TP_UNID"], n).str.zfill(2)
-    sus = SIH._texto(col["VINC_SUS"], n) if col["VINC_SUS"] is not None else pd.Series("1", index=mun.index)
-    ok = tipo.isin(TIPOS_AB) & (sus == "1")
-    out = mun[ok].value_counts().rename_axis("mun6").reset_index(name="estab_atencao_basica")
-    out["mun6"] = pd.to_numeric(out["mun6"], errors="coerce")
-    return out.dropna().astype({"mun6": np.int64})
+    df = pd.DataFrame({"mun6": SIH._texto(col["CODUFMUN"], n).str[:6], "tipo": SIH._texto(col["TIPO_EQP"], n).str.zfill(2),
+                       "desat": SIH._texto(col["DT_DESAT"], n), "id": SIH._texto(col["IDEQUIPE"], n)})
+    df = df[df["tipo"].isin(TIPOS) & df["desat"].isin(ATIVA)]
+    df = df.drop_duplicates(["mun6", "tipo", "id"]) if df["id"].ne("").any() else df
+    out = df.pivot_table(index="mun6", columns="tipo", values="desat", aggfunc="size", fill_value=0)
+    out = out.reindex(columns=list(TIPOS), fill_value=0).rename(columns={k: f"equipes_{v[0]}" for k, v in TIPOS.items()})
+    out.index = pd.to_numeric(out.index, errors="coerce")
+    return out[out.index.notna()].rename_axis("mun6").reset_index().astype(np.int64)
 
 
-def competencia_recente(nomes: list[str], ufs=SIH.UFS) -> str:
+def competencia_recente(nomes: list[str], grupo: str = "EP", ufs=SIH.UFS) -> str:
     """AAMM mais recente com arquivo para todas as UFs."""
-    por_uf = {}
+    por_uf, k = {}, len(grupo)
     for n in nomes:
         n = n.upper()
-        if n.startswith("ST") and n.endswith(".DBC") and len(n) == 12:
-            por_uf.setdefault(n[2:4], set()).add(n[4:8])
+        if n.startswith(grupo) and n.endswith(".DBC") and len(n) == k + 10:
+            por_uf.setdefault(n[k:k + 2], set()).add(n[k + 2:k + 6])
     comuns = set.intersection(*(por_uf.get(u, set()) for u in ufs))
     if not comuns:
-        raise SIH.ErroSIH("nenhuma competência do CNES disponível para todas as UFs")
+        raise SIH.ErroSIH(f"nenhuma competência do CNES ({grupo}) disponível para todas as UFs")
     return max(comuns, key=lambda aamm: (int(aamm[:2]), int(aamm[2:])))
 
 
 def coletar(m: pd.DataFrame, fonte=None, descompactar=SIH.descomprimir, log=print) -> pd.DataFrame:
-    fonte = fonte or SIH.FTPDataSUS(pasta=DIR_ST)
-    nomes = fonte.listar("ST")
+    fonte = fonte or SIH.FTPDataSUS(pasta=f"{DIR_CNES}/EP")
+    nomes = fonte.listar("EP")
     reais = {n.upper(): n for n in nomes}
     aamm = competencia_recente(nomes)
-    log(f"CNES: competência {aamm[2:]}/20{aamm[:2]}")
+    log(f"CNES equipes: competência {aamm[2:]}/20{aamm[:2]}")
     partes = []
     with tempfile.TemporaryDirectory() as tmp:
         for uf in SIH.UFS:
-            nome = f"ST{uf}{aamm}.DBC"
+            nome = f"EP{uf}{aamm}.DBC"
             dbc, dbf = os.path.join(tmp, "a.dbc"), os.path.join(tmp, "a.dbf")
             fonte.baixar(reais.get(nome, nome), dbc)
             descompactar(dbc, dbf)
-            partes.append(agregar_st(dbf))
+            partes.append(agregar_ep(dbf))
             for p in (dbc, dbf):
                 if os.path.exists(p):
                     os.remove(p)
-    est = pd.concat(partes).groupby("mun6", as_index=False)["estab_atencao_basica"].sum()
-    out = pd.DataFrame({"cod_ibge": m["cod_ibge"].astype(str)})
+    eq = pd.concat(partes).groupby("mun6", as_index=False).sum()
+    out = pd.DataFrame({"cod_ibge": m["cod_ibge"].astype(str), "populacao": pd.to_numeric(m["populacao"], errors="coerce")})
     out["mun6"] = out["cod_ibge"].str[:6].astype(np.int64)
-    out = out.merge(est, on="mun6", how="left").fillna({"estab_atencao_basica": 0})
-    out["estab_atencao_basica"] = out["estab_atencao_basica"].astype(int)
+    out = out.merge(eq, on="mun6", how="left")
+    cols = [f"equipes_{v[0]}" for v in TIPOS.values()]
+    out[cols] = out[cols].fillna(0).astype(int)
+    pessoas = sum(out[f"equipes_{v[0]}"] * v[1] for v in TIPOS.values())
+    out["cobertura_aps"] = (pessoas / out["populacao"]).clip(upper=1).round(4)
     out["competencia"] = f"20{aamm[:2]}-{aamm[2:]}"
-    log(f"  {int(out['estab_atencao_basica'].sum())} estabelecimentos em {int((out['estab_atencao_basica'] > 0).sum())} "
-        f"de {len(out)} municípios")
-    return out[["cod_ibge", "estab_atencao_basica", "competencia"]]
+    log(f"  {int(out['equipes_esf'].sum())} equipes de Saúde da Família e {int(out['equipes_eap'].sum())} de Atenção "
+        f"Primária; cobertura mediana {out['cobertura_aps'].median() * 100:.0f}%")
+    return out[["cod_ibge"] + cols + ["cobertura_aps", "competencia"]]
 
 
 def explorar(grupo: str, uf: str):
     """Mostra colunas e valores frequentes de um arquivo do CNES (diagnóstico do layout)."""
-    fonte = SIH.FTPDataSUS(pasta=f"/dissemin/publicos/CNES/200508_/Dados/{grupo}")
+    fonte = SIH.FTPDataSUS(pasta=f"{DIR_CNES}/{grupo}")
     nomes = fonte.listar(grupo)
-    aamm = competencia_recente(nomes) if grupo == "ST" else max(
-        (n.upper()[len(grupo) + 2:len(grupo) + 6] for n in nomes if n.upper().startswith(grupo + uf)),
-        key=lambda x: (int(x[:2]), int(x[2:])))
+    aamm = max((n.upper()[len(grupo) + 2:len(grupo) + 6] for n in nomes if n.upper().startswith(grupo + uf)),
+               key=lambda x: (int(x[:2]), int(x[2:])))
     with tempfile.TemporaryDirectory() as tmp:
         dbc, dbf = os.path.join(tmp, "a.dbc"), os.path.join(tmp, "a.dbf")
         nome = f"{grupo}{uf}{aamm}.dbc"
