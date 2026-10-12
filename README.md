@@ -70,6 +70,7 @@ climasenior/fontes.py        conectores IBGE, Open-Meteo e coordenadas
 climasenior/ehf.py           Fator de Excesso de Calor
 climasenior/simulacao_br.py  respostas simuladas para testes
 site/index.html              painel
+site/img/                    logos dos apoiadores (Itaú Viver Mais; Portal do Envelhecimento e Longeviver)
 climasenior/operacional.py   versão-piloto da RM de São Luís com ERA5 por sede (0.4)
 climasenior/modelos.py, backtesting.py, api/, app/   módulos de pesquisa (0.3)
 ```

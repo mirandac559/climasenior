@@ -10,24 +10,40 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
-  --bg:#f5f7fa; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --contorno:#b8c2cc;
-  --azul:#1b95d5; --azul-esc:#0e5f8a; --laranja:#ff6200;
-  --baixa:#7fb539; --moderada:#eab126; --alta:#e07b2a; --muitoalta:#cf3f38; --semdado:#c4cad1;
-  --warn-bg:#fff7e6; --warn-ink:#7a4a00; --shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.05);
+  /* marcas: Portal do Envelhecimento e Longeviver (azul, verde, laranja, cinza) e Itaú Viver Mais (laranja, verdes, grafite) */
+  --m-azul:#1e84ba; --m-verde:#66b454; --m-laranja:#ea8a36; --m-cinza:#5a6060;
+  --m-verde-claro:#a8cc42; --m-verde-esc:#188424; --m-laranja-itau:#fc9630; --logo-bg:#ffffff;
+  --bg:#f4f6f6; --card:#ffffff; --ink:#242828; --muted:#5a6060; --line:#e1e6e6; --contorno:#b5bebe;
+  --azul:#1e84ba; --azul-esc:#14628c; --verde-txt:#188424; --laranja:#ea8a36; --realce:rgba(30,132,186,.08); --realce-forte:rgba(30,132,186,.17);
+  --baixa:#7fb539; --moderada:#eab126; --alta:#e07b2a; --muitoalta:#cf3f38; --semdado:#c4cbcb;
+  --warn-bg:#fff4e8; --warn-ink:#7a4300; --shadow:0 1px 3px rgba(20,40,50,.06),0 8px 24px rgba(20,40,50,.05);
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#0f1720; --card:#172230; --ink:#e6edf3; --muted:#9aa7b4; --line:#2a3646; --contorno:#4a5868; --semdado:#4a5563;
-  --warn-bg:#3a2a10; --warn-ink:#ffd9a0; --shadow:0 1px 3px rgba(0,0,0,.3); color-scheme:dark;
+  --bg:#0f161b; --card:#162027; --ink:#e7ebeb; --muted:#a4adad; --line:#27343c; --contorno:#4b5a60; --semdado:#4a5559;
+  --azul:#4aa6d9; --azul-esc:#7cc3ea; --verde-txt:#86cb6f; --laranja:#f0a050; --realce:rgba(74,166,217,.10); --realce-forte:rgba(74,166,217,.22);
+  --warn-bg:#3a2a12; --warn-ink:#ffd8a6; --shadow:0 1px 3px rgba(0,0,0,.3); color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --bg:#0f1720; --card:#172230; --ink:#e6edf3; --muted:#9aa7b4; --line:#2a3646; --contorno:#4a5868; --semdado:#4a5563;
-  --warn-bg:#3a2a10; --warn-ink:#ffd9a0; --shadow:0 1px 3px rgba(0,0,0,.3); color-scheme:dark;
+  --bg:#0f161b; --card:#162027; --ink:#e7ebeb; --muted:#a4adad; --line:#27343c; --contorno:#4b5a60; --semdado:#4a5559;
+  --azul:#4aa6d9; --azul-esc:#7cc3ea; --verde-txt:#86cb6f; --laranja:#f0a050; --realce:rgba(74,166,217,.10); --realce-forte:rgba(74,166,217,.22);
+  --warn-bg:#3a2a12; --warn-ink:#ffd8a6; --shadow:0 1px 3px rgba(0,0,0,.3); color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;line-height:1.45}
-header{background:var(--azul);color:#fff;padding:20px 24px}
-header h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.2px}
-header p{margin:4px 0 0;opacity:.92;font-size:13px}
+header{background:var(--card);color:var(--ink);border-bottom:1px solid var(--line);position:relative}
+header::before{content:"";display:block;height:6px;background:linear-gradient(90deg,
+  var(--m-azul) 0 34%, var(--m-verde) 34% 56%, var(--m-laranja) 56% 74%, var(--m-verde-claro) 74% 86%, var(--m-cinza) 86% 100%)}
+.topo{max-width:1180px;margin:0 auto;padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 28px}
+.topo>div:first-child{min-width:0;flex:1 1 360px}
+header h1{margin:0;font-size:24px;font-weight:700;letter-spacing:.2px;color:var(--azul-esc)}
+header h1 span{color:var(--verde-txt)}
+header p{margin:4px 0 0;font-size:13px;color:var(--muted);text-wrap:balance}
+.apoio{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.apoio .rot{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.logos{display:flex;align-items:center;gap:16px;background:var(--logo-bg);border-radius:8px;padding:6px 10px}
+.logos img{display:block;height:42px;width:auto;max-width:100%}
+.logos .div{width:1px;align-self:stretch;background:#d5dada}
+@media (max-width:520px){ .logos img{height:34px} .logos{gap:12px} }
 .wrap{max-width:1180px;margin:0 auto;padding:16px 20px 40px}
 .warn{background:var(--warn-bg);color:var(--warn-ink);border-left:4px solid var(--laranja);padding:10px 14px;border-radius:6px;margin:14px 0;font-size:13px}
 .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:end;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);margin:14px 0}
@@ -62,8 +78,8 @@ th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--muted);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--card)}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr{cursor:pointer}
-tbody tr:hover td{background:rgba(27,149,213,.07)}
-tbody tr.sel td{background:rgba(27,149,213,.16);font-weight:600}
+tbody tr:hover td{background:var(--realce)}
+tbody tr.sel td{background:var(--realce-forte);font-weight:600}
 .escopo{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;font-size:13px;color:var(--muted);margin:14px 0 -4px}
 .escopo b{color:var(--ink)}
 .link{border:none;background:none;padding:0;font:inherit;color:var(--azul-esc);text-decoration:underline;cursor:pointer}
@@ -92,8 +108,20 @@ footer a{color:var(--azul-esc)}
 </head>
 <body>
 <header>
-  <h1>ClimaSênior</h1>
-  <p id="subtitulo">Índice de Vulnerabilidade Climática para a saúde da população idosa · Brasil</p>
+  <div class="topo">
+    <div>
+      <h1>Clima<span>Sênior</span></h1>
+      <p id="subtitulo">Índice de Vulnerabilidade Climática para a saúde da população idosa · Brasil</p>
+    </div>
+    <div class="apoio">
+      <span class="rot">Apoio</span>
+      <div class="logos">
+        <img src="img/itau-viver-mais.png" alt="Itaú Viver Mais" width="104" height="42">
+        <span class="div" aria-hidden="true"></span>
+        <img src="img/portal-envelhecimento-longeviver.png" alt="Portal do Envelhecimento e Longeviver" width="146" height="42">
+      </div>
+    </div>
+  </div>
 </header>
 <div class="wrap">
   <div id="avisos"></div>
