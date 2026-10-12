@@ -48,9 +48,10 @@ def test_cobertura_da_atencao_primaria(tmp_path):
     assert cap.loc["2111300", "cobertura_aps"] == (2 * 3450 + 3000) / 10_000
     assert cap.loc["2100055", "cobertura_aps"] == 1.0 and cap.loc["2200400", "cobertura_aps"] == 0.0
     assert (cap["competencia"] == "2026-07").all()
-    # no IVC: capacidade = 1 - cobertura
+    # no IVC: 1 - (pessoas acompanháveis por habitante, sem teto) / percentil 99 do país
     P = B.Pastas(tmp_path / "d", tmp_path / "s")
     cap.reset_index().to_csv(P.ref / "capacidade.csv", sep=";", index=False)
-    assert np.allclose(B.capacidade(m, P), [1 - 0.99, 0.0, 1.0])
+    razao = np.array([0.99, 3450 / 2000, 0.0])
+    assert np.allclose(B.capacidade(m, P), 1 - np.clip(razao / np.percentile(razao, 99), 0, 1))
     w, _ = B.pesos_ivc(m, P)
     assert w == {"exposicao": 0.60, "sensibilidade": 0.25, "capacidade": 0.15}

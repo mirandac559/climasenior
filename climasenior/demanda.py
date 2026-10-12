@@ -7,7 +7,9 @@ calor do IVC e a demanda habitual do lugar.
 Algoritmo: gradient boosting de árvores de decisão com perda de Poisson
 (HistGradientBoostingRegressor, scikit-learn), adequado a contagens e a dezenas de milhões
 de registros. Dois desfechos: todas as causas clínicas (demanda assistencial) e causas
-sensíveis ao calor.
+sensíveis ao calor. O modelo aprende a razão entre as internações do dia e a demanda
+habitual do município (exposição da regressão de Poisson): previsto = razão x demanda habitual.
+Assim cidades grandes e pequenas ficam na mesma escala e o ajuste é estável.
 
 Variáveis (todas disponíveis no dia da previsão):
   base    demanda habitual: média diária do município nos 365 dias que terminam 180 dias
@@ -41,6 +43,7 @@ TESTE = (date(2025, 1, 1), date(2025, 12, 31))
 CLIMA = ["E0", "E1", "E2", "X3"]
 VARIAVEIS = ["base", "mes", "dsem", "doy_s", "doy_c", "S", "C", "lpop60", "uf"] + CLIMA
 FRACAO_TREINO = 0.35
+BASE_MINIMA = 0.02             # demanda habitual mínima (internações/dia) usada como exposição
 DIR_MODELOS = C.RAIZ / "modelos"
 UF_ORDEM = sorted(["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE",
                    "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"])
@@ -74,9 +77,9 @@ def matriz(ii: np.ndarray, jj: np.ndarray, base: np.ndarray, Em: np.ndarray, X: 
 
 def _modelo():
     from sklearn.ensemble import HistGradientBoostingRegressor
-    return HistGradientBoostingRegressor(loss="poisson", learning_rate=0.08, max_iter=600, max_leaf_nodes=48,
-                                         min_samples_leaf=200, l2_regularization=1.0, early_stopping=True,
-                                         validation_fraction=0.1, n_iter_no_change=25, random_state=0)
+    return HistGradientBoostingRegressor(loss="poisson", learning_rate=0.06, max_iter=800, max_leaf_nodes=48,
+                                         min_samples_leaf=500, l2_regularization=1.0, early_stopping=True,
+                                         validation_fraction=0.1, n_iter_no_change=30, random_state=0)
 
 
 def _metricas(y, p, dia, uf, X3, calib=True) -> dict:
@@ -153,15 +156,16 @@ def treinar(M: dict, log=print, fracao: float = FRACAO_TREINO, semente: int = 7)
         base[i] = ((cs[i - DEFASAGEM_BASE] - cs[i - DEFASAGEM_BASE - JANELA_BASE]) / JANELA_BASE).astype(np.float32)
         Xs = {k: matriz(ii, jj, base, Em, X, cal, mun, k0) for k, (ii, jj) in conj.items()}
         ys = {k: Y[g][ii, jj] for k, (ii, jj) in conj.items()}
+        ex = {k: np.maximum(np.nan_to_num(base[ii, jj], nan=BASE_MINIMA), BASE_MINIMA) for k, (ii, jj) in conj.items()}
         res = {}
         for nome, cols in (("com_clima", VARIAVEIS), ("sem_clima", [v for v in VARIAVEIS if v not in CLIMA])):
             sel = [VARIAVEIS.index(c) for c in cols]
             est = _modelo().set_params(categorical_features=[cols.index("uf")])
-            est.fit(Xs["treino"][:, sel], ys["treino"])
+            est.fit(Xs["treino"][:, sel], ys["treino"] / ex["treino"], sample_weight=ex["treino"])
             r = {"iteracoes": int(est.n_iter_)}
             for k in ("validacao", "teste"):
                 ii, jj = conj[k]
-                p = est.predict(Xs[k][:, sel])
+                p = est.predict(Xs[k][:, sel]) * ex[k]
                 r[k] = _metricas(ys[k], p, ii, uf_cod[jj], Xs[k][:, VARIAVEIS.index("X3")], calib=(nome == "com_clima"))
                 if nome == "com_clima":
                     prev.setdefault(g, {})[k] = (ii, jj, p)
@@ -179,7 +183,8 @@ def treinar(M: dict, log=print, fracao: float = FRACAO_TREINO, semente: int = 7)
         base_oper[f"base_{g}"] = Y[g][a_base:].mean(0).round(4)
     meta.update({
         "versao": __version__, "treinado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "algoritmo": "gradient boosting de árvores com perda de Poisson (scikit-learn HistGradientBoostingRegressor)",
+        "algoritmo": "gradient boosting de árvores com perda de Poisson e a demanda habitual como exposição "
+                     "(scikit-learn HistGradientBoostingRegressor)",
         "variaveis": VARIAVEIS, "variaveis_clima": CLIMA,
         "periodos": {"treino": [dias[a_tr].date().isoformat(), dias[b_tr].date().isoformat()],
                      "validacao": [dias[a_va].date().isoformat(), dias[b_va].date().isoformat()],
@@ -247,7 +252,9 @@ def prever(mods: dict, base: pd.DataFrame, m: pd.DataFrame, dias: pd.DatetimeInd
     out = {}
     ii, jj = np.repeat(np.arange(nd), nm), np.tile(np.arange(nm), nd)
     for g, d in mods.items():
-        bg = np.broadcast_to(b[f"base_{g}"].to_numpy(dtype=np.float32), (nd, nm))
+        bm = b[f"base_{g}"].to_numpy(dtype=np.float32)
+        bg = np.broadcast_to(bm, (nd, nm))
         Xm = matriz(ii, jj, bg, Em, X, cal, mun, k_em)
-        out[g] = d["modelo"].predict(Xm[:, [VARIAVEIS.index(v) for v in d["variaveis"]]]).reshape(nd, nm)
+        expo = np.maximum(np.nan_to_num(bm, nan=BASE_MINIMA), BASE_MINIMA)
+        out[g] = d["modelo"].predict(Xm[:, [VARIAVEIS.index(v) for v in d["variaveis"]]]).reshape(nd, nm) * expo[None, :]
     return out

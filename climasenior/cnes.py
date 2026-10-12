@@ -11,7 +11,8 @@ ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Dados/EP/EP{UF}{AA}{MM}.
 Para a competência mais recente disponível em todas as UFs, contam-se as equipes ativas
 (sem data de desativação) de Saúde da Família (tipo 70) e de Atenção Primária (tipo 76).
 Cobertura estimada, como no indicador do Ministério da Saúde: (eSF x 3.450 + eAP x 3.000)
-pessoas / população, limitada a 100%. No IVC, capacidade = 1 - cobertura.
+pessoas / população, limitada a 100% na coluna cobertura_aps. No IVC usa-se a mesma razão sem
+o teto, relativa ao percentil 99 do país (ver brasil.capacidade): componente = 1 - razão relativa.
 
 Uso: python -m climasenior.cnes          (grava data/ref/capacidade.csv)
 """

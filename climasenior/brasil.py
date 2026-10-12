@@ -450,17 +450,25 @@ def sensibilidade(m: pd.DataFrame) -> np.ndarray:
 
 
 def capacidade(m: pd.DataFrame, P: Pastas) -> np.ndarray | None:
-    """1 - cobertura da atenção primária (CNES); None sem o arquivo ou com cobertura incompleta."""
+    """
+    Capacidade de resposta a partir das equipes da atenção primária (CNES): pessoas que as equipes
+    de Saúde da Família e de Atenção Primária podem acompanhar por habitante (sem o teto de 100%),
+    relativas ao percentil 99 do país, como a sensibilidade. Componente do IVC = 1 - essa razão:
+    menos equipes por habitante, maior a vulnerabilidade. None sem o arquivo ou com cobertura incompleta.
+    """
     arq = P.ref / "capacidade.csv"
     if not arq.exists():
         return None
-    cap = pd.read_csv(arq, sep=";", dtype={"cod_ibge": str})
-    if "cobertura_aps" not in cap.columns:
+    cap = pd.read_csv(arq, sep=";", dtype={"cod_ibge": str}).set_index("cod_ibge")
+    if not {"equipes_esf", "equipes_eap"} <= set(cap.columns):
         return None
-    cob = m["cod_ibge"].astype(str).map(dict(zip(cap["cod_ibge"], cap["cobertura_aps"])))
-    if cob.notna().mean() < 0.9:
+    cod = m["cod_ibge"].astype(str)
+    pessoas = cod.map(cap["equipes_esf"] * 3450 + cap["equipes_eap"] * 3000)
+    razao = pessoas / pd.to_numeric(m["populacao"], errors="coerce").to_numpy()
+    if razao.notna().mean() < 0.9:
         return None
-    return (1 - cob.clip(0, 1)).fillna(0.5).to_numpy(dtype=float)
+    q = np.nanpercentile(razao, 99)
+    return (1 - (razao / q).clip(0, 1)).fillna(0.5).to_numpy(dtype=float)
 
 
 def exposicao(t: pd.DataFrame, ref: pd.DataFrame) -> dict:
@@ -544,6 +552,15 @@ def _consecutivos(q: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # 6. Exportação do painel
 # =============================================================================
+def _info_capacidade(P: Pastas):
+    try:
+        cap = pd.read_csv(P.ref / "capacidade.csv", sep=";", dtype={"cod_ibge": str})
+        return {"fonte": "CNES/DataSUS", "indicador": "cobertura da atenção primária (eSF e eAP)",
+                "competencia": str(cap["competencia"].iloc[0])}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def demanda_prevista(r: dict, m: pd.DataFrame, P: Pastas, validos: list[int]):
     """Internações de 60+ previstas pelo modelo de demanda (modelos/), para os dias exportados."""
     from . import demanda as D
@@ -627,6 +644,7 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
         "n_municipios": int(len(m)), "n_celulas": int(len(cel)),
         "ultimo_dia_cpc": extra.get("cpc_fim"), "pesos": r["pesos"], "limiar": C.LIMIAR_ACAO,
         "capacidade_disponivel": r["C"] is not None, "avisos": avisos, "demanda": meta_dem,
+        "capacidade": _info_capacidade(P) if r["C"] is not None else None,
         "pendencias": {"celula_dias_faltando": extra.get("pendentes"), "celulas_sem_vies": extra.get("sem_vies")},
         "vies_modelo": {"tmax_mediana": _r(vies["vies_tmax"].median(), 2) if vies is not None and len(vies) else None,
                         "tmax_p10": _r(vies["vies_tmax"].quantile(.1), 2) if vies is not None and len(vies) else None,
@@ -642,6 +660,10 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
             {"nome": "IBGE, localidades e malhas", "url": "https://servicodados.ibge.gov.br/api/docs", "uso": "municípios e contornos das UFs"},
             {"nome": "kelvins/municipios-brasileiros", "url": "https://github.com/kelvins/municipios-brasileiros",
              "licenca": "MIT", "uso": "coordenadas das sedes municipais"},
+            {"nome": "CNES/DataSUS (equipes de saúde)", "url": "https://cnes.datasus.gov.br",
+             "uso": "cobertura da atenção primária (capacidade de resposta)"},
+            {"nome": "SIH/DataSUS (internações)", "url": "https://datasus.saude.gov.br/transferencia-de-arquivos/",
+             "uso": "validação do IVC e modelo de demanda"},
         ],
     })
     return [d for d, _ in lista_dias]

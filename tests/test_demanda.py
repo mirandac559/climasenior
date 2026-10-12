@@ -69,3 +69,19 @@ def test_previsao_no_painel(tmp_path, monkeypatch):
     assert sum(v for v in d["dem"] if v) > sum(v for v in d["demc"] if v) > 0
     meta_site = json.loads((site / "meta.json").read_text(encoding="utf-8"))
     assert meta_site["demanda"]["periodos"]["teste"] == ["2025-01-01", "2025-12-31"]
+
+
+def test_estavel_com_cidades_muito_grandes(tmp_path):
+    """Uma cidade com demanda cem vezes maior que as demais não pode fazer a previsão explodir."""
+    P = B.Pastas(tmp_path / "d", tmp_path / "s")
+    m = _municipios_sinteticos(n=30, ncel=6)
+    m.loc[0, "pop60"] = 2_000_000                                    # "São Paulo"
+    cels = [f"c{k}" for k in range(6)]
+    datas = pd.date_range("2013-12-01", "2025-12-31")
+    E = _exposicao_sintetica(datas, ncel=6, semente=41)
+    sih, _ = _internacoes_sinteticas(m, E, datas, cels, date(2014, 1, 1), rr_calor=1.3, semente=42)
+    M = V.matrizes(E, datas, cels, m, P, sih, date(2014, 1, 1), date(2025, 12, 31), log=lambda *a: None)
+    _, meta, _ = D.treinar(M, log=lambda *a: None, fracao=0.5)
+    for g in ("todas", "calor"):
+        t = meta["grupos"][g]["com_clima"]["teste"]
+        assert 0.9 < t["razao_total"] < 1.1 and t["d2"] > 0.3 and meta["grupos"][g]["com_clima"]["iteracoes"] > 30

@@ -83,6 +83,8 @@ tbody tr.sel td{background:var(--realce-forte);font-weight:600}
 .escopo{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;font-size:13px;color:var(--muted);margin:14px 0 -4px}
 .escopo b{color:var(--ink)}
 .link{border:none;background:none;padding:0;font:inherit;color:var(--azul-esc);text-decoration:underline;cursor:pointer}
+.botao{border:1px solid var(--line);background:var(--card);color:var(--azul-esc);font:inherit;font-size:12px;font-weight:600;border-radius:6px;padding:5px 10px;cursor:pointer;margin-bottom:8px}
+.botao:hover{background:var(--realce)}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 .pill.f-MODERADA{color:#2b2100}
 .tbl-wrap{overflow:auto;max-height:470px}
@@ -126,7 +128,7 @@ td small{color:var(--muted);font-weight:400}
   <div class="topo">
     <div>
       <h1>Clima<span>Sênior</span></h1>
-      <p id="subtitulo">Índice de Vulnerabilidade Climática para a saúde da população idosa · Brasil</p>
+      <p id="subtitulo">Índice de Vulnerabilidade Climática para a saúde da população idosa</p>
     </div>
     <div class="apoio">
       <span class="rot">Apoio</span>
@@ -154,13 +156,14 @@ td small{color:var(--muted);font-weight:400}
     <div class="kpi"><div class="l" id="k2l">IVC máximo</div><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
     <div class="kpi"><div class="l" id="k3l">Tmáx média</div><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
     <div class="kpi"><div class="l">Pessoas com 60+ em alerta</div><div class="v" id="k4">–</div><div class="s" id="k4s"></div></div>
+    <div class="kpi" id="k5box" hidden><div class="l">Internações previstas de idosos</div><div class="v" id="k5">–</div><div class="s" id="k5s"></div></div>
   </div>
 
   <div class="tabs" role="tablist">
     <button class="tab on" data-p="p1" role="tab">Situação</button>
     <button class="tab" data-p="p2" role="tab">Série temporal</button>
     <button class="tab" data-p="p3" role="tab">Protocolo</button>
-    <button class="tab" data-p="p4" role="tab">Validação (Fase 3)</button>
+    <button class="tab" data-p="p4" role="tab">Validação</button>
   </div>
 
   <div id="p1" class="panel on">
@@ -171,7 +174,7 @@ td small{color:var(--muted);font-weight:400}
         <div class="mapa-wrap"><canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC"></canvas></div>
       </div>
       <div class="card">
-        <h3>Painel de situação</h3>
+        <div class="val-topo"><div><h3>Painel de situação</h3></div><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
         <div class="sub" id="tabData"></div>
         <div class="tbl-wrap"><table id="tab"><thead><tr><th>Município</th><th>UF</th><th class="n">IVC</th><th>Faixa</th><th class="n">Tmáx</th><th class="n">Dias</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -240,7 +243,7 @@ td small{color:var(--muted);font-weight:400}
           <div class="ctl"><label for="valAno">Ano</label><select id="valAno"></select></div>
         </div>
         <div class="chart-wrap"><canvas id="cValSerie" role="img" aria-label="Internações diárias e dias de alerta"></canvas></div>
-        <div class="legenda"><span><i style="background:var(--azul-esc)"></i>Internações por dia (média de 7 dias)</span><span><i style="background:var(--alta);opacity:.6"></i>Fundo: parcela das pessoas com 60+ em alerta no dia (tom mais forte a partir de 40%)</span></div>
+        <div class="legenda"><span><i style="background:var(--azul-esc)"></i>Internações por dia (média de 7 dias)</span><span id="legPrev" hidden><i style="background:var(--verde-txt)"></i>Previsto pelo modelo de demanda (média de 7 dias)</span><span><i style="background:var(--alta);opacity:.6"></i>Fundo: parcela das pessoas com 60+ em alerta no dia (tom mais forte a partir de 40%)</span></div>
       </div>
       <div class="grid2">
         <div class="card">
@@ -252,6 +255,18 @@ td small{color:var(--muted);font-weight:400}
           <h3 id="valRegTit">Por região</h3>
           <div class="sub" id="valRegSub"></div>
           <div class="tbl-wrap"><table id="tabReg"><thead><tr><th>Área</th><th class="n">Aumento do risco</th><th class="n">IC 95%</th><th class="n">A mais por ano</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+      <div class="card" id="valModelo" hidden>
+        <h3>Modelo de demanda (aprendizado de máquina)</h3>
+        <div class="sub" id="valModeloSub"></div>
+        <p class="frase" id="valModeloFrase" style="font-size:14px"></p>
+        <div class="grid2">
+          <div class="tbl-wrap"><table id="tabModelo"><thead><tr><th>Teste em <span id="anoTeste"></span></th><th class="n">Todas as causas clínicas</th><th class="n">Sensíveis ao calor</th></tr></thead><tbody></tbody></table></div>
+          <div>
+            <div class="chart-wrap baixo"><canvas id="cCalib" role="img" aria-label="Calibração do modelo de demanda"></canvas></div>
+            <div class="legenda" id="calibLeg"></div>
+          </div>
         </div>
       </div>
       <div class="card"><h3>Como foi feito</h3><ul class="metodo" id="valMetodo"></ul></div>
@@ -300,7 +315,7 @@ const fmt = (n, d=0) => { if(n == null || Number.isNaN(Number(n))) return "–";
 const dataBR = s => { const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`; };
 const pill = v => { const f = faixa(v); return f ? `<span class="pill f-${f.r.replace(" ","_")}" style="background:var(${f.v})">${f.r}</span>` : "–"; };
 
-let VAL = null, VALS = {}, gF = null, gL = null, gV = null, anoVal = {};
+let VAL = null, VALS = {}, gF = null, gL = null, gV = null, gC = null, anoVal = {};
 const REGIAO = {RO:"Norte",AC:"Norte",AM:"Norte",RR:"Norte",PA:"Norte",AP:"Norte",TO:"Norte",MA:"Nordeste",PI:"Nordeste",CE:"Nordeste",RN:"Nordeste",PB:"Nordeste",PE:"Nordeste",AL:"Nordeste",SE:"Nordeste",BA:"Nordeste",MG:"Sudeste",ES:"Sudeste",RJ:"Sudeste",SP:"Sudeste",PR:"Sul",SC:"Sul",RS:"Sul",MS:"Centro-Oeste",MT:"Centro-Oeste",GO:"Centro-Oeste",DF:"Centro-Oeste"};
 let META, MUN, UFS, DIAS = {}, SERIES = {}, dia = 0, lim = 60, area = "BR", sel = null, idxArea = [], pontos = [], gS = null, gT = null;
 
@@ -378,11 +393,34 @@ async function atualizar(){
     $("k4").textContent = fmt(al.reduce((s,x) => s + (MUN.pop60[x.i] || 0), 0));
     $("k4s").textContent = `Censo 2022, soma dos municípios com IVC ≥ ${lim}`;
   }
+  // internações de urgência de 60+ previstas pelo modelo de demanda (centésimos no arquivo do dia)
+  $("k5box").hidden = !D.dem;
+  if(D.dem){
+    const ix = m ? [sel] : idxArea;
+    const soma = a => ix.reduce((s, i) => s + (a[i] || 0), 0) / 100;
+    const t = soma(D.dem), c = soma(D.demc || []);
+    $("k5").textContent = fmt(t, t < 10 ? 1 : 0);
+    $("k5s").textContent = `por dia, urgência, todas as causas clínicas; ${fmt(c, c < 10 ? 1 : 0)} por causas sensíveis ao calor (modelo de demanda)`;
+  }
   tabela(vals, d);
   desenharMapa(D);
   protocolo(vals, d);
   validacao(vals, d);
   if($("p4").classList.contains("on")) validacaoRetro().catch(console.error);
+}
+
+function baixarCsv(){
+  const D = DIAS[META.dias[dia][0]], d = META.dias[dia][0];
+  const lin = [["data","cod_ibge","municipio","uf","ivc","faixa","alerta","tmax","dias_onda_calor","pop60","internacoes_previstas","internacoes_previstas_calor"].join(";")];
+  for(const i of idxArea){
+    const c = MUN.cel[i], v = D.ivc[i];
+    lin.push([d, MUN.cod[i], `"${MUN.nome[i]}"`, MUN.uf[i], v ?? "", faixa(v)?.r || "", v != null && v >= lim ? "sim" : "nao",
+      c >= 0 && D.tmax[c] != null ? String(D.tmax[c]).replace(".", ",") : "", c >= 0 ? D.dc[c] : "", MUN.pop60[i] ?? "",
+      D.dem && D.dem[i] != null ? String(D.dem[i] / 100).replace(".", ",") : "", D.demc && D.demc[i] != null ? String(D.demc[i] / 100).replace(".", ",") : ""].join(";"));
+  }
+  const url = URL.createObjectURL(new Blob(["\ufeff" + lin.join("\n")], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a"); a.href = url; a.download = `climasenior_${area}_${d}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 function tabela(vals, d){
@@ -459,7 +497,7 @@ function validacao(vals, d){
     ["Municípios cobertos", fmt(META.n_municipios), `${fmt(META.n_celulas)} células climáticas de 0,5°`],
     ["Observação (CPC) até", META.ultimo_dia_cpc ? dataBR(META.ultimo_dia_cpc) : "–", "temperatura medida por estações"],
     ["Previsão até", dataBR(META.dias[META.dias.length-1][0]), "modelo, corrigido pela observação"],
-    ["Pendências", fmt(pend.celula_dias_faltando || 0), "combinações de célula e dia a completar"],
+    ["Atualizado em", new Date(META.gerado_em).toLocaleDateString("pt-BR", {timeZone:"America/Sao_Paulo"}), `às ${new Date(META.gerado_em).toLocaleTimeString("pt-BR", {timeZone:"America/Sao_Paulo", hour:"2-digit", minute:"2-digit"})} (Brasília)${pend.celula_dias_faltando ? ` · ${fmt(pend.celula_dias_faltando)} lacunas a completar` : ""}`],
   ].map(k => `<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join("");
   const com = vals.filter(x => x.ivc != null);
   const cont = FAIXAS.map(f => com.filter(x => faixa(x.ivc).r === f.r).length);
@@ -472,7 +510,9 @@ function validacao(vals, d){
     <div class="rec"><b>Correção do modelo.</b> ${v.celulas ? `Em ${fmt(v.celulas)} células, o modelo de previsão ficou em média ${fmt(v.tmax_mediana,2)} °C acima da observação na temperatura máxima (entre ${fmt(v.tmax_p10,2)} e ${fmt(v.tmax_p90,2)} °C em 80% das células). A diferença é descontada.` : "Ainda não calculada."}</div>
     <div class="rec"><b>Sensibilidade.</b> Proporção de pessoas com 60 e com 80 anos ou mais (Censo 2022), relativa ao percentil 99 do país.</div>
     <div class="rec"><b>Calibração com saúde.</b> ${VAL ? "A validação com as internações do SIH está acima; a com óbitos (SIM) e a pactuação dos limiares com os gestores seguem em andamento." : "A validação dos limiares com internações e óbitos do DataSUS está em andamento; esses registros chegam com meses de atraso."}</div>
-    <div class="rec"><b>Pesos atuais.</b> Exposição ${fmt(META.pesos.exposicao*100)}%, sensibilidade ${fmt(META.pesos.sensibilidade*100)}%${META.pesos.capacidade ? `, capacidade ${fmt(META.pesos.capacidade*100)}%` : " (capacidade de resposta pendente)"}.</div>`;
+    <div class="rec"><b>Capacidade de resposta.</b> ${META.capacidade ? `Cobertura da atenção primária pelas equipes de Saúde da Família e de Atenção Primária (CNES, competência ${META.capacidade.competencia.split("-").reverse().join("/")}); quanto menor a cobertura, maior o IVC.` : "Ainda não incorporada."}</div>
+    <div class="rec"><b>Pesos.</b> Exposição ${fmt(META.pesos.exposicao*100)}%, sensibilidade ${fmt(META.pesos.sensibilidade*100)}%${META.pesos.capacidade ? `, capacidade de resposta ${fmt(META.pesos.capacidade*100)}%` : ""}.</div>
+    ${META.demanda ? `<div class="rec"><b>Internações previstas.</b> Modelo de aprendizado de máquina treinado com as internações do SIH de ${META.demanda.periodos.treino[0].slice(0,4)} a ${META.demanda.periodos.treino[1].slice(0,4)} e testado em ${META.demanda.periodos.teste[0].slice(0,4)} (aba Validação); a demanda habitual de cada município vem de ${META.demanda.base_operacional[0].slice(0,4)}.</div>` : ""}`;
 }
 
 // ------------------------------------------------------------------ validação retrospectiva (SIH/DataSUS)
@@ -577,7 +617,43 @@ async function validacaoRetro(){
     `<b>Limites.</b> O SIH cobre só internações pagas pelo SUS. O município é o de residência, não necessariamente onde a pessoa estava. A sensibilidade usa o Censo 2022 para todos os anos e a referência climática é do mesmo período. Internações de 2025 ainda podem chegar ao sistema. É uma associação: poluição e umidade não foram ajustadas.`,
     `<b>Referências.</b> ${(mt.referencias || []).join("; ")}.`,
   ].map(x => `<li>${x}</li>`).join("");
+  modeloDemanda(V, g);
   await serieValidacao();
+}
+function modeloDemanda(V, g){
+  const Dm = V.demanda, info = V.demanda_info;
+  $("valModelo").hidden = !Dm;
+  if(!Dm) return;
+  const [t0, t1] = info.periodos.treino, [v0, v1] = info.periodos.validacao, [s0] = info.periodos.teste, ano = s0.slice(0, 4);
+  $("anoTeste").textContent = ano;
+  $("valModeloSub").textContent = `Estima as internações de urgência de pessoas com 60+ esperadas em cada município e dia, a partir da demanda habitual do lugar, do calendário e da exposição ao calor do IVC. Gradient boosting de árvores com perda de Poisson, treinado com ${t0.slice(0,4)}–${t1.slice(0,4)}, ajustado em ${v0.slice(0,4)}–${v1.slice(0,4)} e testado em ${ano}, ano que o modelo não viu. O mesmo modelo sem as variáveis de calor serve de comparação.`;
+  const T = k => Dm[k].com_clima.teste, Ss = k => Dm[k].sem_clima.teste;
+  const pct = x => x == null ? "–" : `${fmt(x * 100, 0)}%`;
+  const linhas = [
+    ["Erro médio por estado e dia", k => `${fmt(T(k).uf_dia.mae, 1)} <small>(${fmt(T(k).uf_dia.mape, 1)}%)</small>`],
+    ["Correlação diária por estado", k => fmt(T(k).uf_dia.r, 2)],
+    ["Dias de demanda alta antecipados", k => `${pct(T(k).dias_altos.sensibilidade)} <small>precisão ${pct(T(k).dias_altos.precisao)} · F1 ${fmt(T(k).dias_altos.f1, 2)}</small>`],
+    ["Variação explicada por município e dia (D²)", k => `${fmt(T(k).d2, 3)} <small>sem calor ${fmt(Ss(k).d2, 3)}</small>`],
+    ["Dias de alerta: observado ÷ previsto", k => `${fmt(T(k).alerta_razao, 2)} <small>sem calor ${fmt(Ss(k).alerta_razao, 2)}</small>`],
+    [`Total de ${ano}: observado ÷ previsto`, k => fmt(T(k).razao_total, 2)],
+  ];
+  $("tabModelo").querySelector("tbody").innerHTML = linhas.map(([n, f]) => `<tr><td>${n}</td><td class="n">${f("todas")}</td><td class="n">${f("calor")}</td></tr>`).join("");
+  const c = T("calor"), cs = Ss("calor"), t = T("todas");
+  $("valModeloFrase").innerHTML = `Em ${ano}, a previsão de todas as causas errou em média <b>${fmt(t.uf_dia.mae, 0)} internações por estado e dia (${fmt(t.uf_dia.mape, 0)}%)</b>. ` +
+    `Para as causas sensíveis ao calor, nos dias de alerta o observado ficou ${fmt(Math.abs(c.alerta_razao - 1) * 100, 0)}% ${c.alerta_razao >= 1 ? "acima" : "abaixo"} do previsto com a informação de calor, contra ${fmt(Math.abs(cs.alerta_razao - 1) * 100, 0)}% ${cs.alerta_razao >= 1 ? "acima" : "abaixo"} sem ela.`;
+  const gm = Dm[g] ? g : "todas", cal = T(gm).calibracao || [];
+  const tinta = css("--muted"), linha = css("--line"), cor = css("--azul-esc");
+  const mx = Math.max(...cal.flat()) * 1.08;
+  const diag = {id:"diag", beforeDatasetsDraw(ch){ const {ctx, scales:{x,y}} = ch; ctx.save(); ctx.strokeStyle = css("--muted"); ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(x.getPixelForValue(0), y.getPixelForValue(0)); ctx.lineTo(x.getPixelForValue(mx), y.getPixelForValue(mx)); ctx.stroke(); ctx.restore(); }};
+  gC && gC.destroy();
+  gC = new Chart($("cCalib"), {type:"scatter", plugins:[diag],
+    data:{datasets:[{data:cal.map(([p, o]) => ({x:p, y:o})), pointRadius:6, pointHoverRadius:8, pointBackgroundColor:cor, pointBorderColor:css("--card"), pointBorderWidth:2}]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label: it => `previsto ${fmt(it.raw.x, 2)} · observado ${fmt(it.raw.y, 2)}`}}},
+      scales:{x:{min:0, max:mx, ticks:{color:tinta, callback: v => fmt(v, 2)}, grid:{color:linha}, title:{display:true, text:"previsto (internações por município e dia)", color:tinta}},
+              y:{min:0, max:mx, ticks:{color:tinta, callback: v => fmt(v, 2)}, grid:{color:linha}, title:{display:true, text:"observado", color:tinta}}}}});
+  $("calibLeg").innerHTML = `<span>Calibração em ${ano}, ${Dm[gm].nome.toLowerCase()}: cada ponto é um décimo dos municípios-dia, do menor ao maior previsto. Sobre a diagonal, previsto = observado.</span>`;
 }
 let areaAtualVal = "BR";
 async function serieValidacao(){
@@ -596,6 +672,10 @@ async function serieValidacao(){
   const idx = []; for(let i = 0; i < n; i++) if(+dataDe(i).slice(0, 4) === anoVal[ak]) idx.push(i);
   const y = S[g] || S.calor, mm = idx.map(i => { let s = 0, c = 0; for(let k = i - 3; k <= i + 3; k++) if(k >= 0 && k < n){ s += y[k]; c++; } return s / c; });
   const ap = idx.map(i => S.alerta_pop[i]);
+  const pv = S[`prev_${g}`], desl = pv ? Math.round((Date.parse(S.prev_d0 + "T12:00:00Z") - t0) / 864e5) : 0;
+  const mmPrev = pv ? idx.map(i => { let s = 0, c = 0; for(let k = i - 3; k <= i + 3; k++){ const j = k - desl; if(j >= 0 && j < pv.length && pv[j] != null){ s += pv[j]; c++; } } return c ? s / c : null; }) : null;
+  const temPrev = mmPrev && mmPrev.some(v => v != null);
+  $("legPrev").hidden = !temPrev;
   const nomeA = ak === "BR" ? "Brasil" : (UF_NOME[ak] || ak);
   $("valSerieSub").textContent = `${nomeA}, ${anoVal[ak]}: ${V.grupos[g].nome.toLowerCase()}, 60+. Cada faixa vertical é um dia; quanto mais escura, maior a parcela da população idosa da área em alerta.`;
   const quente = css("--alta"), tinta = css("--muted"), linha = css("--line");
@@ -607,10 +687,11 @@ async function serieValidacao(){
   gV && gV.destroy();
   gV = new Chart($("cValSerie"), {type:"line", plugins:[fundo],
     data:{labels:idx.map(i => { const d = dataBR(dataDe(i)); return d.slice(0, 5); }),
-      datasets:[{label:"Internações", data:mm, borderColor:css("--azul-esc"), borderWidth:2, pointRadius:0, pointHoverRadius:4, tension:.25}]},
+      datasets:[{label:"Internações", data:mm, borderColor:css("--azul-esc"), borderWidth:2, pointRadius:0, pointHoverRadius:4, tension:.25}]
+        .concat(temPrev ? [{label:"Previsto", data:mmPrev, borderColor:css("--verde-txt"), borderWidth:2, borderDash:[6,4], pointRadius:0, pointHoverRadius:4, tension:.25}] : [])},
     options:{responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:"index", intersect:false},
       plugins:{legend:{display:false}, tooltip:{callbacks:{title: it => dataBR(dataDe(idx[it[0].dataIndex])),
-        label: it => [`Internações: ${fmt(y[idx[it.dataIndex]])} no dia · média de 7 dias ${fmt(it.raw, 1)}`, `60+ em alerta: ${fmt(ap[it.dataIndex], 1)}%`]}}},
+        label: it => it.datasetIndex === 1 ? `Previsto pelo modelo: média de 7 dias ${fmt(it.raw, 1)}` : [`Internações: ${fmt(y[idx[it.dataIndex]])} no dia · média de 7 dias ${fmt(it.raw, 1)}`, `60+ em alerta: ${fmt(ap[it.dataIndex], 1)}%`]}}},
       scales:{x:{ticks:{color:tinta, maxTicksLimit:12, maxRotation:0}, grid:{display:false}},
         y:{beginAtZero:false, ticks:{color:tinta}, grid:{color:linha}, title:{display:true, text:"internações por dia", color:tinta}}}}});
 }
@@ -678,7 +759,6 @@ async function iniciar(){
     document.querySelector(".wrap").insertAdjacentHTML("afterbegin", `<div class="vazio"><b>Os dados ainda não foram gerados.</b> Execute <code>python -m climasenior.brasil</code> ou o fluxo “Atualizar ClimaSênior” no GitHub Actions. (${e.message})</div>`);
     return;
   }
-  $("subtitulo").textContent = `Índice de Vulnerabilidade Climática para a saúde da população idosa · Brasil, ${fmt(META.n_municipios)} municípios · atualização diária`;
   const av = [];
   if(META.modo !== "real") av.push("<b>Simulação.</b> Este painel foi gerado com dados simulados para teste do sistema. Os municípios são fictícios e os valores não descrevem a realidade.");
   (META.avisos || []).forEach(a => av.push(a + "."));
@@ -714,12 +794,13 @@ async function iniciar(){
     return i; };
   $("busca").onchange = e => { const i = acharMunicipio(e.target.value); if(i >= 0){ if(i !== sel) selecionar(i, false); } else if(!e.target.value.trim()) limparMunicipio(); };
   $("busca").addEventListener("input", e => { if(!e.target.value) limparMunicipio(); else { const v = e.target.value; const i = MUN.nome.findIndex((n,k) => `${n} (${MUN.uf[k]})` === v); if(i >= 0 && i !== sel) selecionar(i, false); } });
+  $("baixarCsv").onclick = baixarCsv;
   $("tab").addEventListener("click", e => { const tr = e.target.closest("tr[data-i]"); if(tr) selecionar(+tr.dataset.i, true); });
   const tip = $("tip");
   $("mapa").addEventListener("mousemove", ev => {
     const i = maisProximo(ev); if(i == null){ tip.style.display = "none"; return; }
     const D = DIAS[META.dias[dia][0]], c = MUN.cel[i];
-    tip.innerHTML = `<b>${MUN.nome[i]} (${MUN.uf[i]})</b><br>IVC ${fmt(D.ivc[i])} · ${faixa(D.ivc[i])?.r || "sem dado"}<br>Tmáx ${c >= 0 ? fmt(D.tmax[c],1) : "–"} °C · ${c >= 0 && D.dc[c] ? `${D.dc[c]} dia(s) de onda de calor` : "sem onda de calor"}<br>60+: ${fmt(MUN.pop60[i])} pessoas`;
+    tip.innerHTML = `<b>${MUN.nome[i]} (${MUN.uf[i]})</b><br>IVC ${fmt(D.ivc[i])} · ${faixa(D.ivc[i])?.r || "sem dado"}<br>Tmáx ${c >= 0 ? fmt(D.tmax[c],1) : "–"} °C · ${c >= 0 && D.dc[c] ? `${D.dc[c]} dia(s) de onda de calor` : "sem onda de calor"}<br>60+: ${fmt(MUN.pop60[i])} pessoas${D.dem && D.dem[i] != null ? `<br>Internações previstas: ${fmt(D.dem[i] / 100, 1)} por dia` : ""}`;
     tip.style.display = "block"; tip.style.left = Math.min(ev.clientX + 14, innerWidth - 290) + "px"; tip.style.top = (ev.clientY + 14) + "px";
   });
   $("mapa").addEventListener("mouseleave", () => tip.style.display = "none");
