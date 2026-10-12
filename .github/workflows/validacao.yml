@@ -10,6 +10,9 @@ on:
       piloto:
         description: "Teste com UF(s) e ano, ex.: MA 2024 ou MA,PI 2024. Vazio = Brasil inteiro"
         default: ""
+      reusar:
+        description: "Só refazer a análise com as internações já baixadas numa execução anterior (número da execução)"
+        default: ""
 
 permissions:
   contents: write
@@ -42,6 +45,7 @@ jobs:
 
   internacoes:
     needs: preparar
+    if: inputs.reusar == ''
     runs-on: ubuntu-latest
     timeout-minutes: 330
     strategy:
@@ -69,7 +73,7 @@ jobs:
 
   analise:
     needs: [preparar, internacoes]
-    if: always() && needs.preparar.result == 'success'
+    if: always() && needs.preparar.result == 'success' && needs.internacoes.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -89,6 +93,8 @@ jobs:
           pattern: sih-*
           path: sih
           merge-multiple: true
+          run-id: ${{ inputs.reusar || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Recalcular o IVC 2014-2025 e comparar com as internações
         env:
           UFS: ${{ needs.preparar.outputs.ufs }}

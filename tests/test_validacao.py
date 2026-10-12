@@ -133,7 +133,9 @@ def test_analise_recupera_o_efeito(tmp_path):
     br = res["areas"]["BR"]["grupos"]
     a = br["calor"]["alerta"]
     assert a["lo"] < 1.4 < a["hi"] and abs(a["rr"] - 1.4) < 0.08
-    assert a["excesso"] > 0 and a["observadas"] > a["esperadas"]
+    # internações a mais: N nos dias de alerta x (1 - 1/RR), com o mesmo intervalo da razão
+    assert a["excesso_lo"] < a["excesso"] < a["excesso_hi"]
+    assert a["excesso"] == pytest.approx(a["internacoes_em_alerta"] * (1 - 1 / a["rr"]), rel=0.003)   # rr arredondado
     # 'todas' inclui o efeito de 'calor', diluído; um grupo sem efeito fica perto de 1
     nulo = res["areas"]["BR"]["grupos"]["circ"]["alerta"]
     assert nulo["rr"] is None                                           # sem internações: não estima

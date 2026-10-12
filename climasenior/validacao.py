@@ -154,22 +154,30 @@ def por_municipio(est: Estratos, Y: np.ndarray, expo: np.ndarray, ref: np.ndarra
 
 
 def resumir(pm: dict, idx: np.ndarray, boot: np.ndarray, anos: float) -> dict:
+    """
+    Razão de taxas de Mantel-Haenszel com IC por bootstrap de municípios e internações a mais
+    nos dias expostos: N_expostos x (1 - 1/RR), a fração atribuível entre os expostos
+    aplicada ao que ocorreu nesses dias (mesmo sinal e mesmo intervalo da razão).
+    """
     num, den = pm["num"][idx], pm["den"][idx]
     sd = den.sum()
-    if sd <= 0:
-        return {"rr": None, "lo": None, "hi": None}
+    T = pm["T"][idx].sum()
+    dias_pct = B._r(pm["t1"][idx].sum() / T * 100, 2) if T > 0 else None
+    if sd <= 0 or num.sum() <= 0:
+        return {"rr": None, "lo": None, "hi": None, "dias_pct": dias_pct}
     rr = num.sum() / sd
     bn, bd = num[boot].sum(1), den[boot].sum(1)
     ok = bd > 0
     lo, hi = (np.percentile(bn[ok] / bd[ok], [2.5, 97.5]) if ok.sum() > 20 else (np.nan, np.nan))
-    O, E = pm["O"][idx].sum(), pm["E"][idx].sum()
-    T = pm["T"][idx].sum()
+    n_exp = pm["a_total"][idx].sum()
+
+    def exc(r):
+        return n_exp * (1 - 1 / r) if r is not None and np.isfinite(r) and r > 0 else np.nan
     return {"rr": B._r(rr, 3), "lo": B._r(lo, 3), "hi": B._r(hi, 3),
-            "observadas": int(round(O)), "esperadas": B._r(E, 1),
-            "excesso": B._r(O - E, 0), "excesso_ano": B._r((O - E) / anos, 0),
-            "pct": B._r((O / E - 1) * 100, 1) if E > 0 else None,
-            "dias_pct": B._r(pm["t1"][idx].sum() / T * 100, 2) if T > 0 else None,
-            "internacoes_em_alerta": int(round(pm["a_total"][idx].sum()))}
+            "excesso": B._r(exc(rr), 0), "excesso_lo": B._r(exc(lo), 0), "excesso_hi": B._r(exc(hi), 0),
+            "excesso_ano": B._r(exc(rr) / anos, 0),
+            "excesso_ano_lo": B._r(exc(lo) / anos, 0), "excesso_ano_hi": B._r(exc(hi) / anos, 0),
+            "dias_pct": dias_pct, "internacoes_em_alerta": int(round(n_exp))}
 
 
 def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.DataFrame, P: B.Pastas,
@@ -269,7 +277,7 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
             r["limiares"] = []
             for k in LIMIARES:
                 s = r["alerta"] if k == LIMIAR else resumir(pm[g][f"lim:{k}"], ix, boot, anos)
-                r["limiares"].append({"k": k, **{c: s.get(c) for c in ("rr", "lo", "hi", "dias_pct", "excesso_ano", "pct",
+                r["limiares"].append({"k": k, **{c: s.get(c) for c in ("rr", "lo", "hi", "dias_pct", "excesso_ano",
                                                                          "internacoes_em_alerta")}})
             out["grupos"][g] = r
         return out
@@ -286,8 +294,7 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
         pv = (valido[:, ix] * pop60[ix]).sum(1)
         pa = (em_alerta[:, ix] * pop60[ix]).sum(1)
         series[a] = {"d0": inicio.isoformat(),
-                     "calor": Y["calor"][:, ix].sum(1).astype(int).tolist(),
-                     "todas": Y["todas"][:, ix].sum(1).astype(int).tolist(),
+                     **{g: Y[g][:, ix].sum(1).astype(int).tolist() for g in SIH.GRUPOS},
                      "alerta_pop": np.round(np.where(pv > 0, pa / np.where(pv > 0, pv, 1) * 100, 0), 1).tolist()}
 
     resultado = {
@@ -305,8 +312,8 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
             "exposicao": f"dia em alerta: IVC do dia ou de um dos {JANELA - 1} dias anteriores >= {LIMIAR}",
             "desfecho": "internações de urgência de pessoas com 60 anos ou mais (AIH tipo 1), por município de "
                         "residência e data de internação",
-            "medida": "razão de taxas de Mantel-Haenszel; IC 95% por bootstrap de municípios; excesso = observadas - "
-                      "esperadas pela taxa dos dias sem alerta do mesmo estrato",
+            "medida": "razão de taxas de Mantel-Haenszel; IC 95% por bootstrap de municípios; internações a mais = "
+                      "internações nos dias de alerta x (1 - 1/razão)",
             "referencias": ["Nairn J, Fawcett R. Int J Environ Res Public Health 2015;12:227-253",
                             "Bobb JF et al. JAMA 2014;312(24):2659-2667",
                             "Janes H, Sheppard L, Lumley T. Epidemiology 2005;16(6):717-726"],
