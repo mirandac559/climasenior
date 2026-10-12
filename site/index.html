@@ -93,7 +93,7 @@ tbody tr.sel td{background:var(--realce-forte);font-weight:600}
 .rec{padding:6px 0;border-bottom:1px dashed var(--line)}
 .rec:last-child{border-bottom:none}
 .recs{max-height:470px;overflow:auto}
-.bars .row{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;margin:7px 0;font-size:12px}
+.bars .row{display:grid;grid-template-columns:110px 1fr 96px;gap:8px;align-items:center;margin:7px 0;font-size:12px}
 .bars .trilho{background:var(--line);border-radius:5px;height:12px;overflow:hidden}
 .bars .bar{height:12px;border-radius:5px}
 .bars .row span:last-child{text-align:right;font-variant-numeric:tabular-nums}
@@ -295,7 +295,8 @@ const $ = id => document.getElementById(id);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const faixa = v => v == null ? null : (FAIXAS.find(f => v >= f.de && v < f.ate + 1) || FAIXAS[3]);
 const corIVC = v => v == null ? css("--semdado") : css(faixa(v).v);
-const fmt = (n, d=0) => n == null || Number.isNaN(n) ? "–" : Number(n).toLocaleString("pt-BR", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmt = (n, d=0) => { if(n == null || Number.isNaN(Number(n))) return "–"; let x = Number(n); if(Math.abs(x) < 0.5 * 10 ** -d) x = 0;
+  return x.toLocaleString("pt-BR", {minimumFractionDigits:d, maximumFractionDigits:d}); };
 const dataBR = s => { const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`; };
 const pill = v => { const f = faixa(v); return f ? `<span class="pill f-${f.r.replace(" ","_")}" style="background:var(${f.v})">${f.r}</span>` : "–"; };
 
@@ -503,10 +504,14 @@ function graficoRR(alvo, antigo, rotulos, pontos, cores, dica){
     options:{responsive:true, maintainAspectRatio:false, animation:false,
       plugins:{legend:{display:false}, tooltip:{callbacks:{title: it => rotulos[it[0].dataIndex], label: it => dica(pontos[it.dataIndex])}}},
       scales:{x:{ticks:{color:tinta}, grid:{display:false}},
-        y:{suggestedMin:Math.max(0, Math.min(...vals) - 0.03), min:0, suggestedMax:Math.max(...vals) + 0.03, ticks:{color:tinta, callback: v => fmt(v, 2)}, grid:{color:linha},
+        y:{min:Math.max(0, Math.floor((Math.min(...vals) - 0.03) * 10) / 10), suggestedMax:Math.max(...vals) + 0.03, ticks:{color:tinta, callback: v => fmt(v, 2)}, grid:{color:linha},
            title:{display:true, text:"razão de taxas", color:tinta}}}}});
 }
 function areaValidacao(){ return sel != null ? MUN.uf[sel] : area; }
+// artigo de cada área, para "no Brasil", "na Bahia", "em São Paulo"
+const ART = {BR:"o",AC:"o",AM:"o",AP:"o",BA:"a",CE:"o",DF:"o",ES:"o",MA:"o",MS:"o",MT:"o",PA:"o",PB:"a",PI:"o",PR:"o",RJ:"o",RN:"o",RS:"o",TO:"o"};
+const em = ak => ({o:"no ", a:"na "}[ART[ak]] || "em ");
+const de = ak => ({o:"do ", a:"da "}[ART[ak]] || "de ");
 
 async function validacaoRetro(){
   const V = await carregarValidacao();
@@ -526,13 +531,13 @@ async function validacaoRetro(){
   $("valSub").textContent = `O IVC de cada dia ${p0 === p1 ? "de " + p0 : `de ${p0} a ${p1}`} foi recalculado como o painel faria e comparado com as internações de urgência de pessoas com 60 anos ou mais no SUS (SIH/DataSUS). Cada dia é comparado com dias do mesmo município, mês e dia da semana. ${nomeA}: ${fmt(A.n_municipios)} municípios.`;
   const notas = [];
   if(V.piloto) notas.push(`<b>Resultado de teste</b> (${(V.ufs || []).join(", ")}, ${p0 === p1 ? p0 : p0 + "–" + p1}).`);
-  if(sel != null) notas.push(`Resultados de <b>${nomeA}</b>: a validação é feita por estado, porque um município sozinho tem poucas internações por dia para uma estimativa estável.`);
+  if(sel != null) notas.push(`Resultados ${de(ak)}<b>${nomeA}</b>: a validação é feita por estado, porque um município sozinho tem poucas internações por dia para uma estimativa estável.`);
   $("valNota").innerHTML = notas.join(" "); $("valNota").hidden = !notas.length;
   const sig = signif(a);
   const POR = {calor:"por causas sensíveis ao calor", circ:"por doenças do aparelho circulatório", resp:"por doenças do aparelho respiratório", todas:"por qualquer causa clínica"};
   const fr = R.faixas.filter(f => f.faixa !== "BAIXA" && f.rr != null);
   $("valFrase").innerHTML = a.rr == null ? "" :
-    `Em ${nomeA}, nos dias de alerta (IVC ≥ ${V.limiar}), as internações de pessoas com 60 anos ou mais ${POR[g] || ""} foram ` +
+    `${em(ak).charAt(0).toUpperCase() + em(ak).slice(1)}${nomeA}, nos dias de alerta (IVC ≥ ${V.limiar}), as internações de pessoas com 60 anos ou mais ${POR[g] || ""} foram ` +
     `<b>${fmt(Math.abs(a.rr - 1) * 100, 0)}% ${a.rr >= 1 ? "maiores" : "menores"}</b> do que em dias comparáveis sem alerta` +
     (sig ? (a.excesso_ano > 0 ? `, cerca de <b>${fmt(a.excesso_ano)} internações a mais por ano</b>.` : ".") : " — diferença sem significância estatística.") +
     (fr.length > 1 ? ` Por faixa do IVC, em relação à BAIXA: ${fr.map(f => `${f.faixa} ${pctRR(f.rr)}`).join(", ")}.` : "");
@@ -540,7 +545,7 @@ async function validacaoRetro(){
     ["Internações analisadas", fmt(R.total), `${V.grupos[g].nome.toLowerCase()}, 60+, urgência, ${per}`],
     ["Aumento nos dias de alerta", pctRR(a.rr), a.rr == null ? "sem dados suficientes" : `razão ${fmt(a.rr, 2)} (IC 95% ${icRR(a.lo, a.hi)}) · IVC ≥ ${V.limiar}${sig ? "" : " · sem diferença estatística"}`],
     ["Internações a mais por ano", a.excesso_ano == null ? "–" : fmt(a.excesso_ano), a.excesso == null ? "" : `nos dias de alerta (IC 95% ${fmt(a.excesso_ano_lo)} a ${fmt(a.excesso_ano_hi)}); ${fmt(a.excesso)} em ${anos} ${anos > 1 ? "anos" : "ano"}`],
-    ["Dias em alerta", a.dias_pct == null ? "–" : `${fmt(a.dias_pct, 1)}%`, R.total ? `dos dias de cada município; neles ocorreram ${fmt((a.internacoes_em_alerta || 0) / R.total * 100, 1)}% das internações` : ""],
+    ["Dias em alerta", a.dias_pct == null ? "–" : `${fmt(a.dias_pct, 1)}%`, R.total ? `do total de dias dos municípios; neles ocorreram ${fmt((a.internacoes_em_alerta || 0) / R.total * 100, 1)}% das internações` : ""],
   ].map(k => `<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join("");
 
   const fx = R.faixas, coresF = fx.map(f => css(FAIXAS.find(z => z.r === f.faixa).v));
@@ -607,7 +612,7 @@ async function serieValidacao(){
       plugins:{legend:{display:false}, tooltip:{callbacks:{title: it => dataBR(dataDe(idx[it[0].dataIndex])),
         label: it => [`Internações: ${fmt(y[idx[it.dataIndex]])} no dia · média de 7 dias ${fmt(it.raw, 1)}`, `60+ em alerta: ${fmt(ap[it.dataIndex], 1)}%`]}}},
       scales:{x:{ticks:{color:tinta, maxTicksLimit:12, maxRotation:0}, grid:{display:false}},
-        y:{beginAtZero:true, ticks:{color:tinta}, grid:{color:linha}, title:{display:true, text:"internações por dia", color:tinta}}}}});
+        y:{beginAtZero:false, ticks:{color:tinta}, grid:{color:linha}, title:{display:true, text:"internações por dia", color:tinta}}}}});
 }
 
 // ------------------------------------------------------------------ série temporal
