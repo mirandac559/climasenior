@@ -53,6 +53,7 @@ LIMIARES = [40, 50, 60, 70, 80]
 DEFASAGENS = list(range(0, 8))
 FAIXAS = [("BAIXA", 0, 40), ("MODERADA", 40, 60), ("ALTA", 60, 80), ("MUITO ALTA", 80, 1000)]
 N_BOOT = 500
+MIN_MUNICIPIOS_BOOT = 30          # abaixo disso, o bootstrap reamostra município-ano (ex.: DF, com um só município)
 REGIOES = {"Norte": ["RO", "AC", "AM", "RR", "PA", "AP", "TO"],
            "Nordeste": ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"],
            "Sudeste": ["MG", "ES", "RJ", "SP"], "Sul": ["PR", "SC", "RS"], "Centro-Oeste": ["MS", "MT", "GO", "DF"]}
@@ -133,6 +134,8 @@ class Estratos:
         self.ordem = np.argsort(s.to_numpy(), kind="stable")
         ss = s.to_numpy()[self.ordem]
         self.inicios = np.r_[0, np.flatnonzero(np.diff(ss)) + 1]
+        ano_estrato = ss[self.inicios] // 84                      # estratos já vêm em ordem de ano
+        self.inicios_ano = np.r_[0, np.flatnonzero(np.diff(ano_estrato)) + 1]
 
     def soma(self, A: np.ndarray) -> np.ndarray:
         return np.add.reduceat(A[self.ordem], self.inicios, axis=0).astype(np.float64)
@@ -145,21 +148,22 @@ def por_municipio(est: Estratos, Y: np.ndarray, expo: np.ndarray, ref: np.ndarra
     t1, t0 = est.soma(expo.astype(np.int32)), est.soma(ref.astype(np.int32))
     T = t1 + t0
     with np.errstate(invalid="ignore", divide="ignore"):
-        num = np.where(T > 0, a * t0 / T, 0).sum(0)
-        den = np.where(T > 0, b * t1 / T, 0).sum(0)
-        ambos = (t1 > 0) & (t0 > 0)
-        O = np.where(ambos, a, 0).sum(0)
-        Ee = np.where(ambos, t1 * b / np.where(t0 > 0, t0, 1), 0).sum(0)
-    return {"num": num, "den": den, "O": O, "E": Ee, "a_total": a.sum(0), "t1": t1.sum(0), "T": T.sum(0)}
+        num = np.add.reduceat(np.where(T > 0, a * t0 / T, 0), est.inicios_ano, axis=0)     # ano x município
+        den = np.add.reduceat(np.where(T > 0, b * t1 / T, 0), est.inicios_ano, axis=0)
+    return {"num_ano": num, "den_ano": den, "num": num.sum(0), "den": den.sum(0),
+            "a_total": a.sum(0), "t1": t1.sum(0), "T": T.sum(0)}
 
 
-def resumir(pm: dict, idx: np.ndarray, boot: np.ndarray, anos: float) -> dict:
+def resumir(pm: dict, idx: np.ndarray, boot: np.ndarray, anos: float, por_ano: bool = False) -> dict:
     """
     Razão de taxas de Mantel-Haenszel com IC por bootstrap de municípios e internações a mais
     nos dias expostos: N_expostos x (1 - 1/RR), a fração atribuível entre os expostos
     aplicada ao que ocorreu nesses dias (mesmo sinal e mesmo intervalo da razão).
     """
-    num, den = pm["num"][idx], pm["den"][idx]
+    if por_ano:                                                # bootstrap de município-ano
+        num, den = pm["num_ano"][:, idx].ravel(), pm["den_ano"][:, idx].ravel()
+    else:
+        num, den = pm["num"][idx], pm["den"][idx]
     sd = den.sum()
     T = pm["T"][idx].sum()
     dias_pct = B._r(pm["t1"][idx].sum() / T * 100, 2) if T > 0 else None
@@ -230,6 +234,7 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
         f" | sem município correspondente: {fora_mun['todas']:,}".replace(",", "."))
 
     est = Estratos(dias)
+    n_anos_estr = len(est.inicios_ano)
     comparacoes = {"alerta": (valido & (X >= LIMIAR), valido & (X < LIMIAR))}
     for nome, lo, hi in FAIXAS[1:]:
         comparacoes[f"faixa:{nome}"] = (valido & (X >= lo) & (X < hi), valido & (X < FAIXAS[0][2]))
@@ -257,26 +262,29 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
     regioes = {r: ix for r, ix in regioes.items() if len(ix)}
 
     def bloco(ix):
-        boot = rng.integers(0, len(ix), (n_boot, len(ix)))        # posições dentro da área
+        por_ano = len(ix) < MIN_MUNICIPIOS_BOOT
+        n_cl = len(ix) * n_anos_estr if por_ano else len(ix)
+        boot = rng.integers(0, n_cl, (n_boot, n_cl))               # posições dentro da área (município ou município-ano)
         validos_area = valido[:, ix].sum()
-        out = {"n_municipios": int(len(ix)), "pop60": int(np.nansum(m.loc[ix, "pop60"])), "grupos": {}}
+        out = {"n_municipios": int(len(ix)), "pop60": int(np.nansum(m.loc[ix, "pop60"])),
+               "bootstrap": "município-ano" if por_ano else "município", "grupos": {}}
         for g in SIH.GRUPOS:
             r = {"total": int(Y[g][:, ix][valido[:, ix]].sum())}
-            r["alerta"] = resumir(pm[g]["alerta"], ix, boot, anos)
+            r["alerta"] = resumir(pm[g]["alerta"], ix, boot, anos, por_ano)
             r["faixas"] = [{"faixa": "BAIXA", "rr": 1.0, "lo": None, "hi": None,
                             "dias_pct": B._r(dias_faixa["BAIXA"][ix].sum() / validos_area * 100, 2)}]
             for nome, _, _ in FAIXAS[1:]:
-                s = resumir(pm[g][f"faixa:{nome}"], ix, boot, anos)
+                s = resumir(pm[g][f"faixa:{nome}"], ix, boot, anos, por_ano)
                 r["faixas"].append({"faixa": nome, "rr": s["rr"], "lo": s["lo"], "hi": s["hi"],
                                     "dias_pct": B._r(dias_faixa[nome][ix].sum() / validos_area * 100, 2),
                                     "excesso_ano": s.get("excesso_ano")})
             r["defasagens"] = []
             for L in DEFASAGENS:
-                s = resumir(pm[g][f"lag:{L}"], ix, boot, anos)
+                s = resumir(pm[g][f"lag:{L}"], ix, boot, anos, por_ano)
                 r["defasagens"].append({"l": L, "rr": s["rr"], "lo": s["lo"], "hi": s["hi"]})
             r["limiares"] = []
             for k in LIMIARES:
-                s = r["alerta"] if k == LIMIAR else resumir(pm[g][f"lim:{k}"], ix, boot, anos)
+                s = r["alerta"] if k == LIMIAR else resumir(pm[g][f"lim:{k}"], ix, boot, anos, por_ano)
                 r["limiares"].append({"k": k, **{c: s.get(c) for c in ("rr", "lo", "hi", "dias_pct", "excesso_ano",
                                                                          "internacoes_em_alerta")}})
             out["grupos"][g] = r
@@ -312,7 +320,8 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
             "exposicao": f"dia em alerta: IVC do dia ou de um dos {JANELA - 1} dias anteriores >= {LIMIAR}",
             "desfecho": "internações de urgência de pessoas com 60 anos ou mais (AIH tipo 1), por município de "
                         "residência e data de internação",
-            "medida": "razão de taxas de Mantel-Haenszel; IC 95% por bootstrap de municípios; internações a mais = "
+            "medida": "razão de taxas de Mantel-Haenszel; IC 95% por bootstrap de municípios (de município-ano nas UFs "
+                      f"com menos de {MIN_MUNICIPIOS_BOOT} municípios); internações a mais = "
                       "internações nos dias de alerta x (1 - 1/razão)",
             "referencias": ["Nairn J, Fawcett R. Int J Environ Res Public Health 2015;12:227-253",
                             "Bobb JF et al. JAMA 2014;312(24):2659-2667",

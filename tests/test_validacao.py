@@ -203,3 +203,17 @@ def test_exposicao_igual_a_operacao_e_exportacao(operacao, tmp_path):
     r = json.loads((P.site / "validacao" / "resultados.json").read_text(encoding="utf-8"))
     assert r["periodo"] == ["2025-02-01", "2025-12-31"] and "BR" in r["areas"]
     assert (P.site / "validacao" / "serie" / "MA.json").exists()
+
+
+def test_bootstrap_em_area_pequena(tmp_path):
+    """Com poucos municípios (como o DF, com um só), o intervalo vem de município-ano e não colapsa."""
+    P = B.Pastas(tmp_path / "d", tmp_path / "s")
+    m = _municipios_sinteticos(n=4, ncel=2)
+    cels = ["c0", "c1"]
+    dias = pd.date_range("2021-12-01", "2025-12-31")
+    E = _exposicao_sintetica(dias, ncel=2, semente=11)
+    sih, _ = _internacoes_sinteticas(m, E, dias, cels, date(2022, 1, 1), rr_calor=1.3, semente=12)
+    res, _ = V.analisar(E, dias, cels, m, P, sih, {}, date(2022, 1, 1), date(2025, 12, 31), n_boot=200, log=lambda *a: None)
+    A = res["areas"]["BR"]
+    a = A["grupos"]["calor"]["alerta"]
+    assert A["bootstrap"] == "município-ano" and a["lo"] < a["rr"] < a["hi"] and a["hi"] - a["lo"] > 0.02

@@ -116,6 +116,8 @@ td small{color:var(--muted);font-weight:400}
 .legenda i{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
 .metodo{margin:0;padding-left:18px;font-size:13px;display:grid;gap:6px;max-width:100ch}
 .metodo b{color:var(--ink)}
+.frase{font-size:15px;line-height:1.55;margin:10px 0 4px;max-width:90ch;text-wrap:pretty}
+.frase b{color:var(--azul-esc)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -218,6 +220,7 @@ td small{color:var(--muted);font-weight:400}
         <div class="ctl"><label for="valGrupo">Causas de internação</label><select id="valGrupo"></select></div>
       </div>
       <div class="nota" id="valNota" hidden></div>
+      <p class="frase" id="valFrase"></p>
       <div class="kpis" id="valKpis"></div>
       <div class="grid2">
         <div class="card">
@@ -526,6 +529,13 @@ async function validacaoRetro(){
   if(sel != null) notas.push(`Resultados de <b>${nomeA}</b>: a validação é feita por estado, porque um município sozinho tem poucas internações por dia para uma estimativa estável.`);
   $("valNota").innerHTML = notas.join(" "); $("valNota").hidden = !notas.length;
   const sig = signif(a);
+  const POR = {calor:"por causas sensíveis ao calor", circ:"por doenças do aparelho circulatório", resp:"por doenças do aparelho respiratório", todas:"por qualquer causa clínica"};
+  const fr = R.faixas.filter(f => f.faixa !== "BAIXA" && f.rr != null);
+  $("valFrase").innerHTML = a.rr == null ? "" :
+    `Em ${nomeA}, nos dias de alerta (IVC ≥ ${V.limiar}), as internações de pessoas com 60 anos ou mais ${POR[g] || ""} foram ` +
+    `<b>${fmt(Math.abs(a.rr - 1) * 100, 0)}% ${a.rr >= 1 ? "maiores" : "menores"}</b> do que em dias comparáveis sem alerta` +
+    (sig ? (a.excesso_ano > 0 ? `, cerca de <b>${fmt(a.excesso_ano)} internações a mais por ano</b>.` : ".") : " — diferença sem significância estatística.") +
+    (fr.length > 1 ? ` Por faixa do IVC, em relação à BAIXA: ${fr.map(f => `${f.faixa} ${pctRR(f.rr)}`).join(", ")}.` : "");
   $("valKpis").innerHTML = [
     ["Internações analisadas", fmt(R.total), `${V.grupos[g].nome.toLowerCase()}, 60+, urgência, ${per}`],
     ["Aumento nos dias de alerta", pctRR(a.rr), a.rr == null ? "sem dados suficientes" : `razão ${fmt(a.rr, 2)} (IC 95% ${icRR(a.lo, a.hi)}) · IVC ≥ ${V.limiar}${sig ? "" : " · sem diferença estatística"}`],
