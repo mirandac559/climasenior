@@ -31,6 +31,11 @@ def test_modelo_de_demanda(tmp_path):
     assert 0.9 < g["com_clima"]["teste"]["razao_total"] < 1.1
     assert len(g["com_clima"]["teste"]["calibracao"]) == 10
     assert set(extra["series"]) >= {"BR", "MA", "PI"} and len(extra["series"]["BR"]["prev_calor"]) == 1096
+    br = np.array(extra["series"]["BR"]["prev_todas"])
+    assert (br[:731] > 0).all() and (br[731:] > 0).all()                      # validação e teste, sem dias zerados
+    uf = np.array(extra["series"]["MA"]["prev_todas"]) + np.array(extra["series"]["PI"]["prev_todas"])
+    assert np.allclose(uf, br, rtol=1e-3)                                     # Brasil = soma das UFs
+    assert 0.8 < g["com_clima"]["fator_calibracao"] < 1.25
     # gravar, carregar e prever como na operação diária
     D.gravar(mods, meta, extra, pasta_modelos=tmp_path / "modelos", pasta_ref=P.ref)
     mods2, meta2 = D.carregar(tmp_path / "modelos")

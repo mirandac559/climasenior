@@ -1,4 +1,4 @@
-# Fase 3 — Roteiro do workshop de validação com gestores
+# Roteiro do workshop de validação com gestores (Fase 3)
 
 **Duração:** 3 horas · **Participantes:** 8 a 15 (SES-MA, secretarias municipais de saúde
 da RM de São Luís, vigilância em saúde ambiental/VIGIDESASTRES, Defesa Civil estadual e
@@ -10,12 +10,14 @@ municipal, representante do Cemaden quando possível, conselho de direitos da pe
 3. Ressalva metodológica: estágio da validação e limites dos dados
 
 ## Bloco 2 — Demonstração guiada (45 min)
-1. Painel de situação: leitura do mapa e da tabela para uma data de episódio real
-2. Série temporal: como o IVC se comportou antes, durante e depois do episódio
-3. Aba de validação: curva de limiares e o trade-off sensibilidade × falso alarme
+1. Aba Situação: leitura do mapa, da tabela e dos indicadores para o estado e para um município
+2. Aba Série temporal: como o IVC se comportou antes, durante e depois de uma onda de calor
+3. Aba Validação: quanto as internações de idosos sobem nos dias de alerta, a tabela "Escolha do limiar"
+   (dias em alerta × aumento do risco) e as internações previstas pelo modelo de demanda
+4. Aba Protocolo: condutas por faixa e recomendações do dia
 
 ## Bloco 3 — Exercício de pactuação (60 min)
-Em grupos por instituição, com a curva de limiares impressa:
+Em grupos por instituição, com a tabela de limiares da aba Validação impressa:
 1. Qual limiar de ação cada instituição consideraria aceitável, e por quê?
 2. Que conduta cada faixa deve acionar na sua instituição? (revisar o protocolo proposto)
 3. Quem executa, com que recurso, em quanto tempo?
@@ -29,7 +31,7 @@ Registro: instrumento 03 (ficha de pactuação), uma por instituição.
 3. Definição do ente receptor e próximos passos da transferência (Fase 4)
 
 ## Materiais
-- Notebook com dashboard em execução (ou link publicado)
-- Curva de limiares impressa (A3), uma por grupo
+- Computador com o painel aberto (https://mirandac559.github.io/climasenior/)
+- Tabela de limiares e resultados da aba Validação impressos (A3), um por grupo
 - Fichas dos instrumentos 03 e 04 impressas
 - Termo de consentimento para registro das contribuições (anonimizado)

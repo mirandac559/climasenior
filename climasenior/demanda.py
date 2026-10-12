@@ -20,6 +20,8 @@ Variáveis (todas disponíveis no dia da previsão):
   S, C    sensibilidade e capacidade de resposta do IVC; log da população 60+; UF
 
 Validação temporal do projeto: treino até 2022, validação em 2023-2024, teste em 2025.
+O período de validação também recalibra o nível: a razão observado/previsto em 2023-2024
+(as internações crescem com o envelhecimento) multiplica as previsões seguintes.
 O mesmo modelo sem as variáveis de calor serve de comparação: a diferença mostra quanto
 a informação climática melhora a estimativa.
 """
@@ -162,16 +164,17 @@ def treinar(M: dict, log=print, fracao: float = FRACAO_TREINO, semente: int = 7)
             sel = [VARIAVEIS.index(c) for c in cols]
             est = _modelo().set_params(categorical_features=[cols.index("uf")])
             est.fit(Xs["treino"][:, sel], ys["treino"] / ex["treino"], sample_weight=ex["treino"])
-            r = {"iteracoes": int(est.n_iter_)}
+            fator = float(ys["validacao"].sum() / (est.predict(Xs["validacao"][:, sel]) * ex["validacao"]).sum())
+            r = {"iteracoes": int(est.n_iter_), "fator_calibracao": fator}
             for k in ("validacao", "teste"):
                 ii, jj = conj[k]
-                p = est.predict(Xs[k][:, sel]) * ex[k]
+                p = est.predict(Xs[k][:, sel]) * ex[k] * fator
                 r[k] = _metricas(ys[k], p, ii, uf_cod[jj], Xs[k][:, VARIAVEIS.index("X3")], calib=(nome == "com_clima"))
                 if nome == "com_clima":
                     prev.setdefault(g, {})[k] = (ii, jj, p)
             res[nome] = r
             if nome == "com_clima":
-                modelos[g] = est
+                modelos[g] = (est, fator)
             log(f"  demanda {g} {nome}: {r['iteracoes']} iterações; teste D²={r['teste']['d2']:.3f} "
                 f"MAE UF-dia={r['teste']['uf_dia']['mae']:.2f} F1={r['teste']['dias_altos']['f1']:.2f} "
                 f"({time.time() - t0:.0f} s)")
@@ -199,8 +202,8 @@ def treinar(M: dict, log=print, fracao: float = FRACAO_TREINO, semente: int = 7)
     for g, partes in prev.items():
         for k, (ii, jj, p) in partes.items():
             pos = ii - a_va
-            br = np.bincount(pos, p, minlength=n_prev)
-            series.setdefault("BR", {})[f"prev_{g}"] = br
+            arr_br = series.setdefault("BR", {}).setdefault(f"prev_{g}", np.zeros(n_prev))
+            arr_br += np.bincount(pos, p, minlength=n_prev)
             for u in np.unique(uf_cod[jj]):
                 s = uf_cod[jj] == u
                 arr = series.setdefault(UF_ORDEM[u], {}).setdefault(f"prev_{g}", np.zeros(n_prev))
@@ -217,9 +220,9 @@ def gravar(modelos: dict, meta: dict, extra: dict, pasta_modelos: Path | None = 
     import joblib
     pasta_modelos = Path(pasta_modelos or DIR_MODELOS)
     pasta_modelos.mkdir(parents=True, exist_ok=True)
-    for g, est in modelos.items():
-        joblib.dump({"modelo": est, "variaveis": VARIAVEIS, "versao": meta["versao"]}, pasta_modelos / f"demanda_{g}.joblib",
-                    compress=3)
+    for g, (est, fator) in modelos.items():
+        joblib.dump({"modelo": est, "fator": fator, "variaveis": VARIAVEIS, "versao": meta["versao"]},
+                    pasta_modelos / f"demanda_{g}.joblib", compress=3)
     (pasta_modelos / "demanda.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     pasta_ref = Path(pasta_ref or (C.DIR_DADOS / "ref"))
     extra["base"].to_csv(pasta_ref / "demanda_base.csv", index=False)
@@ -256,5 +259,6 @@ def prever(mods: dict, base: pd.DataFrame, m: pd.DataFrame, dias: pd.DatetimeInd
         bg = np.broadcast_to(bm, (nd, nm))
         Xm = matriz(ii, jj, bg, Em, X, cal, mun, k_em)
         expo = np.maximum(np.nan_to_num(bm, nan=BASE_MINIMA), BASE_MINIMA)
-        out[g] = d["modelo"].predict(Xm[:, [VARIAVEIS.index(v) for v in d["variaveis"]]]).reshape(nd, nm) * expo[None, :]
+        out[g] = (d["modelo"].predict(Xm[:, [VARIAVEIS.index(v) for v in d["variaveis"]]]).reshape(nd, nm)
+                  * expo[None, :] * d.get("fator", 1.0))
     return out

@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements-operacional.txt \
     && rm -rf /var/lib/apt/lists/*
 COPY climasenior/ climasenior/
 COPY site/ site/
+COPY modelos/ modelos/
 RUN printf '%s\n' \
       '0 6 * * * cd /app && /usr/local/bin/python -m climasenior.brasil >> /var/log/climasenior.log 2>&1' \
       '30 */2 * * * cd /app && /usr/local/bin/python -m climasenior.brasil --complemento >> /var/log/climasenior.log 2>&1' \

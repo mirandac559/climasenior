@@ -47,7 +47,7 @@ class ClienteSimuladoBrasil:
     def __init__(self, hoje: date | None = None):
         self.hoje = hoje or datetime.now(timezone(timedelta(hours=-3))).date()
         self.muns = []
-        rm = {m["nome"]: m for m in C.MUNICIPIOS_OPERACIONAIS}
+        rm = {m["nome"]: m for m in C.MUNICIPIOS_PILOTO}
         k = 0
         for uf, (a, b, c, d, n) in UFS_SIM.items():
             nomes = list(rm) if uf == "MA" else []

@@ -1,110 +1,73 @@
 # ClimaSênior
 
-Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa nos **5.571 municípios
-do Brasil**, atualizado todos os dias desde 1º de janeiro de 2026. O painel mostra a situação do dia no país, em cada estado ou em um município,
-a previsão para os próximos dias, a série de cada município e a conduta do protocolo de resposta graduada.
+**Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa**, para os 5.571
+municípios do Brasil, atualizado todos os dias.
+
+Painel: **https://mirandac559.github.io/climasenior/**
 
 > O presente trabalho foi realizado com apoio do Itaú Viver Mais e Portal do Envelhecimento.
 
-## Como os dados chegam
+## O que a plataforma faz
 
-| O quê | Fonte | Frequência |
-|---|---|---|
-| Municípios, UF e contornos | IBGE (localidades e malhas) | uma vez |
-| Coordenadas das sedes | [kelvins/municipios-brasileiros](https://github.com/kelvins/municipios-brasileiros) (MIT), com geocodificação do Open-Meteo para as que faltarem | uma vez |
-| População 60+ e 80+ | IBGE, Censo 2022, tabela 9514 | uma vez |
-| Climatologia 2014–2025 | CPC Global Unified Temperature (NOAA), grade de 0,5° | uma vez |
-| Temperatura observada de 2026 | CPC (enquanto a NOAA publicar) | diária, se houver novidade |
-| Dias recentes e previsão de 7 dias | Open-Meteo (CC BY 4.0) | diária, 06:00 de Brasília |
-| Lacunas entre a observação e os dias recentes | Open-Meteo, previsão histórica | a cada 2 horas, até completar |
+- **Calcula o IVC de cada município, todos os dias**, de 2026 em diante, com previsão para os
+  próximos 7 dias. O índice combina três componentes:
+  - o calor fora do comum para o lugar (exposição, 60%);
+  - a proporção de pessoas com 60 e 80 anos ou mais (sensibilidade, 25%);
+  - a cobertura da atenção primária (capacidade de resposta, 15%).
+- **Indica a conduta** pelo protocolo de resposta graduada: BAIXA, MODERADA, ALTA e MUITO ALTA,
+  com limiar de ação pactuável.
+- **Estima as internações de idosos esperadas** em cada município e dia, com um modelo de
+  aprendizado de máquina treinado com as internações reais do SUS.
+- **Mostra a evidência** de que o índice funciona. A validação retrospectiva de 2014 a 2025 compara
+  os dias de alerta com 27 milhões de internações de urgência de pessoas com 60+ do SIH/DataSUS.
+- **Disponibiliza os dados abertos** em arquivos JSON e permite baixar a situação do dia em CSV.
 
-Cada município usa a célula de 0,5° (cerca de 55 km) que contém a sua sede; municípios vizinhos
-na mesma célula compartilham a exposição, e cada um tem a sua sensibilidade. O desvio médio do
-modelo de previsão em relação à observação é medido célula a célula, descontado e atualizado
-todos os dias com os dias em que previsão e observação se sobrepõem.
+## Documentação
 
-O uso gratuito do Open-Meteo tem limite de 10.000 chamadas por dia. O sistema consulta uma vez por
-célula (cerca de 2.000) e respeita um teto de 9.500 por dia; o que não couber fica para a execução seguinte.
-
-## O índice
-
-| Componente | Peso | Medida |
-|---|---|---|
-| Exposição | 60% | Fator de Excesso de Calor (Nairn e Fawcett, 2015): média dos três dias seguintes contra o percentil 95 local e contra os 30 dias anteriores |
-| Sensibilidade | 25% | proporção de pessoas com 60+ (70%) e 80+ (30%), relativa ao percentil 99 do país |
-| Capacidade de resposta | 15% | estabelecimentos de atenção básica por habitante (CNES), opcional em `data/ref/capacidade.csv` |
-
-Sem o arquivo de capacidade, o peso é redistribuído entre exposição e sensibilidade; a aba Validação
-mostra os pesos em uso.
-Faixas: BAIXA (0–39), MODERADA (40–59), ALTA (60–79), MUITO ALTA (80–100). Limiar de ação: 60.
-
-## Rodar
-
-```bash
-pip install -r requirements-operacional.txt
-python -m climasenior.brasil                    # dados reais (a primeira execução baixa a climatologia)
-python -m climasenior.brasil --complemento      # só completa lacunas
-python -m climasenior.brasil --painel           # só recalcula e reexporta o painel, sem consultar as fontes
-python -m http.server 8000 -d site              # painel em http://localhost:8000
-```
-
-Teste sem rede, com dados e municípios fictícios: `python -m climasenior.brasil --simular` e
-`python -m http.server 8000 -d simulacao_br/site` (copie `site/index.html` para lá).
-
-Testes: `pip install pytest scikit-learn joblib && python -m pytest tests -q`
-
-## Validação retrospectiva (Fase 3)
-
-O IVC de cada dia de 2014 a 2025 é recalculado para todos os municípios, com a mesma fórmula do
-painel e a temperatura observada da CPC, e comparado com as internações de urgência de pessoas com
-60 anos ou mais no SIH/DataSUS (arquivos RD de todas as UFs, competências 2014 em diante), por
-município de residência e data de internação. Grupos de causa: sensíveis ao calor (E86–E87, N17,
-N19, N39.0, A40–A41, T67, X30; Bobb et al., JAMA 2014), circulatórias, respiratórias e todas as
-causas clínicas.
-
-Desenho: série temporal estratificada no tempo (município × ano × mês × dia da semana; Janes et al.,
-2005). Um dia está em alerta quando o IVC do dia ou de um dos dois anteriores atinge o limiar.
-Medida: razão de taxas de Mantel-Haenszel, com intervalo de 95% por bootstrap de municípios (de
-município-ano nas UFs com menos de 30 municípios); internações a mais = internações nos dias de
-alerta × (1 − 1/razão). Também por faixa do IVC, por dia após o alerta (0 a 7), por limiar (40 a 80),
-por UF e por região. Os resultados aparecem na aba Validação do painel.
-
-O fluxo `.github/workflows/validacao.yml` é disparado à mão: vazio roda o Brasil inteiro (cerca de
-1h20, em paralelo por ano); `piloto = "MA 2024"` testa um estado e um ano; `reusar = <execução>`
-refaz só a análise com as internações já baixadas. Localmente:
-
-```bash
-pip install -r requirements-validacao.txt
-python -m climasenior.validacao sih --ano 2024 --ufs MA --saida sih
-python -m climasenior.validacao analisar --sih sih --ufs MA --anos 2024
-```
-
-## Publicação
-
-O fluxo `.github/workflows/atualizar.yml` roda às 06:00 de Brasília, a cada 2 horas para lacunas e a
-cada mudança em `site/index.html` ou `climasenior/brasil.py` (só o painel, sem consultas),
-grava a série em `data/clima/AAAA/AAAA-MM-DD.csv` (uma linha por célula) e publica o painel no
-GitHub Pages. O registro da última execução fica em `data/log/ultima_execucao.log`.
-Alternativa para servidor próprio: `Dockerfile`.
+| Documento | Para quem |
+|---|---|
+| [Manual do usuário](docs/MANUAL_DO_USUARIO.md) | gestores e técnicos que usam o painel |
+| [Metodologia](docs/METODOLOGIA.md) | IVC, fontes, validação, modelo de demanda e limites |
+| [Guia de implantação e transferência](docs/GUIA_DE_IMPLANTACAO.md) | equipe que vai operar a plataforma |
+| [Governança de dados](docs/GOVERNANCA_DADOS.md) | LGPD, inventário, rastreabilidade |
+| [Verificação do produto](docs/VERIFICACAO.md) | o que foi testado e o que o projeto previa |
+| [Instrumentos da Fase 3](docs/fase3/) | roteiro do workshop, ficha de pactuação de limiares, avaliação de usabilidade |
 
 ## Estrutura
 
 ```
-climasenior/brasil.py        operação nacional (orquestração, EHF, IVC, exportação)
-climasenior/cpc.py           leitura da CPC (NetCDF)
+climasenior/brasil.py        operação diária: território, climatologia, observação, previsão, IVC, painel
+climasenior/cpc.py           leitura da temperatura observada (CPC/NOAA, NetCDF)
 climasenior/fontes.py        conectores IBGE, Open-Meteo e coordenadas
-climasenior/ehf.py           Fator de Excesso de Calor
+climasenior/ehf.py           Fator de Excesso de Calor (Nairn e Fawcett, 2015)
+climasenior/cnes.py          capacidade de resposta (equipes da atenção primária, CNES)
 climasenior/sih.py           internações do SIH/DataSUS (download, leitura e agregação)
 climasenior/validacao.py     validação retrospectiva do IVC (2014-2025)
-climasenior/simulacao_br.py  respostas simuladas para testes
-site/index.html              painel
-site/img/                    logos dos apoiadores (Itaú Viver Mais; Portal do Envelhecimento e Longeviver)
-climasenior/operacional.py   versão-piloto da RM de São Luís com ERA5 por sede (0.4)
-climasenior/modelos.py, backtesting.py, api/, app/   módulos de pesquisa (0.3)
+climasenior/demanda.py       modelo de demanda assistencial (aprendizado de máquina)
+climasenior/simulacao_br.py  respostas simuladas das fontes, para os testes
+site/index.html              painel (uma página; dados em site/data/, gerados pelo pipeline)
+modelos/                     modelos de demanda versionados e suas métricas
+data/                        referências, série diária por célula, resultados da validação
+.github/workflows/           operação diária, CNES, validação e testes
+tests/                       testes automáticos (sem rede)
 ```
 
-## Limites
+## Executar
 
-O índice descreve municípios, não pessoas. A resolução de 0,5° não distingue bairros nem ilhas de
-calor urbanas. Na Amazônia a CPC se apoia em poucas estações. Os limiares ainda serão calibrados com
-óbitos do SIM e pactuados com os gestores; a validação com internações está na aba Validação.
+```bash
+pip install -r requirements-validacao.txt pytest
+python -m pytest tests -q                          # testes
+python -m climasenior.brasil                       # atualização completa (acesso às fontes)
+python -m climasenior.brasil --painel              # só recalcula o painel com os dados gravados
+python -m http.server 8000 -d site                 # painel em http://localhost:8000
+python -m climasenior.cnes                         # capacidade de resposta (CNES)
+python -m climasenior.validacao sih --ano 2024 --ufs MA --saida sih
+python -m climasenior.validacao analisar --sih sih --ufs MA --anos 2024
+```
+
+Sem rede, com dados fictícios: `python -m climasenior.brasil --simular`.
+
+## Licença
+
+MIT. Os dados vêm de fontes públicas: NOAA, Open-Meteo (CC BY 4.0), IBGE, DataSUS (CNES e SIH)
+e kelvins/municipios-brasileiros (MIT).

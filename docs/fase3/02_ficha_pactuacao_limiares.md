@@ -3,7 +3,7 @@
 **Instituição:** ______________________  **Participantes:** ____________________  **Data:** ___/___/______
 
 ## 1. Limiar de ação
-Observando a curva de limiares apresentada, a instituição considera adequado acionar o protocolo a partir de IVC = **____**.
+Observando a tabela "Escolha do limiar" da aba Validação (dias em alerta × aumento das internações), a instituição considera adequado acionar o protocolo a partir de IVC = **____**.
 
 Justificativa (custo de não agir × custo de agir sem necessidade):
 _____________________________________________________________________________
@@ -22,7 +22,7 @@ A composição atual é 60% exposição, 25% sensibilidade, 15% capacidade de re
 A instituição propõe alteração? ( ) Não ( ) Sim: ____ / ____ / ____. Motivo: __________________
 
 ## 4. Integração aos fluxos existentes
-Por qual canal a instituição receberia o IVC? ( ) API ( ) painel ( ) e-mail diário ( ) mensagem ( ) outro: ______
+Por qual canal a instituição receberia o IVC? ( ) arquivos de dados abertos (JSON) ( ) painel ( ) CSV do dia ( ) e-mail diário ( ) mensagem ( ) outro: ______
 O IVC deveria alimentar mensagens do Defesa Civil Alerta? ( ) Sim ( ) Não ( ) Depende: ______________
 
 ## 5. Informação que falta no painel
