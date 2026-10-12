@@ -3,7 +3,7 @@ name: Validação retrospectiva (SIH/DataSUS)
 # Recalcula o IVC de 2014 a 2025 para todos os municípios e o compara com as internações
 # de pessoas com 60+ no SIH/DataSUS. Disparo manual.
 #   piloto vazio  -> Brasil inteiro (competências 2014 a 2026), grava e republica o painel
-#   piloto "MA 2024" -> só o Maranhão em 2024, para conferir; mostra o resumo no registro e não grava
+#   piloto "MA 2024" -> só o Maranhão em 2024, para conferir; grava em data/validacao_piloto (fora do painel)
 on:
   workflow_dispatch:
     inputs:
@@ -95,18 +95,19 @@ jobs:
           ANO: ${{ needs.preparar.outputs.ano_piloto }}
         run: |
           if [ -n "$UFS" ]; then
-            python -m climasenior.validacao analisar --sih sih --ufs "$UFS" --anos "$ANO" --nao-gravar
+            python -m climasenior.validacao analisar --sih sih --ufs "$UFS" --anos "$ANO"
           else
             python -m climasenior.validacao analisar --sih sih
           fi
-      - name: Registrar e republicar o painel
-        if: needs.preparar.outputs.ufs == ''
+      - name: Registrar (e, no Brasil inteiro, republicar o painel)
         env:
           GH_TOKEN: ${{ github.token }}
+          UFS: ${{ needs.preparar.outputs.ufs }}
         run: |
           git config user.name "climasenior-bot"
           git config user.email "climasenior-bot@users.noreply.github.com"
-          git add data/validacao
-          git diff --cached --quiet || git commit -q -m "Validação retrospectiva $(TZ=America/Sao_Paulo date '+%F %H:%M')"
+          if [ -n "$UFS" ]; then PASTA=data/validacao_piloto; else PASTA=data/validacao; fi
+          git add "$PASTA"
+          git diff --cached --quiet || git commit -q -m "Validação retrospectiva ${UFS:-Brasil} $(TZ=America/Sao_Paulo date '+%F %H:%M')"
           git pull -q --rebase && git push
-          gh workflow run atualizar.yml -f modo=painel
+          if [ -z "$UFS" ]; then gh workflow run atualizar.yml -f modo=painel; fi

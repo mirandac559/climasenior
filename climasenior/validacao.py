@@ -29,6 +29,7 @@ Uso (GitHub Actions; o DataSUS e a NOAA não são acessíveis em todo ambiente):
 from __future__ import annotations
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -351,11 +352,15 @@ def main():
     a2.add_argument("--ufs")
     a2.add_argument("--anos", help="ex.: 2024 ou 2023-2024 (piloto)")
     a2.add_argument("--nao-gravar", action="store_true")
+    a2.add_argument("--saida", help="pasta dos resultados (padrão: data/validacao; no piloto, data/validacao_piloto)")
     a2.add_argument("--n-boot", type=int, default=N_BOOT)
     a = ap.parse_args()
     if a.cmd == "sih":
-        SIH.coletar(a.ano, Path(a.saida), ufs=a.ufs.split(",") if a.ufs else None,
-                    meses=[int(x) for x in a.meses.split(",")] if a.meses else None)
+        man = SIH.coletar(a.ano, Path(a.saida), ufs=a.ufs.split(",") if a.ufs else None,
+                          meses=[int(x) for x in a.meses.split(",")] if a.meses else None)
+        aviso_actions(f"SIH {a.ano}", f"{len(man['arquivos'])} arquivos lidos, {len(man['falhas'])} com falha; "
+                      f"{man['registros']} AIH; {man['internacoes_60_urgencia']} internações de 60+ em urgência\n"
+                      + "\n".join(f"falha {k}: {v}" for k, v in list(man["falhas"].items())[:20]))
         return
     P = B.Pastas(C.DIR_DADOS, C.DIR_SITE_DADOS)
     m = pd.read_csv(P.ref / "municipios_br.csv", dtype={"cod_ibge": str, "celula": str})
@@ -376,10 +381,30 @@ def main():
     res, series = analisar(E, datas, cels, m, P, sih, resumo, inicio, fim,
                            ufs=a.ufs.split(",") if a.ufs else None, n_boot=a.n_boot,
                            log=lambda *x: print(*x, flush=True))
-    print(texto_resumo(res), flush=True)
+    resumo_txt = texto_resumo(res)
+    print(resumo_txt, flush=True)
+    aviso_actions(f"Validação {'piloto ' + a.ufs + ' ' + (a.anos or '') if a.ufs else 'Brasil'}", resumo_txt)
     if not a.nao_gravar:
+        if a.saida or a.ufs:
+            P.validacao = Path(a.saida) if a.saida else C.DIR_DADOS / "validacao_piloto"
         gravar(res, series, P)
+        (P.validacao / "resumo.txt").write_text(resumo_txt + "\n", encoding="utf-8")
         print(f"gravado em {P.validacao}", flush=True)
+
+
+def aviso_actions(titulo: str, texto: str):
+    """No GitHub Actions, publica o resumo como anotação (legível pela API, sem baixar o registro)."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    blocos, atual = [], ""
+    for linha in texto.splitlines():
+        if len(atual) + len(linha) > 3500:
+            blocos.append(atual); atual = ""
+        atual += linha + "\n"
+    blocos.append(atual)
+    for k, b in enumerate(blocos[:9]):
+        print(f"::notice title={titulo} ({k + 1})::" + b.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"),
+              flush=True)
 
 
 if __name__ == "__main__":
