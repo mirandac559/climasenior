@@ -1,0 +1,12 @@
+[ClimaSênior 0.5.0 · Brasil] referência 2026-10-12 | modo real | orçamento 4500 chamadas
+[1/5] Território e população
+  municípios do Brasil (IBGE)
+    5571 municípios
+  população por idade (IBGE, Censo 2022), por UF
+[2/5] Climatologia e células
+  climatologia CPC 2014-2025 (grade de 0,5°)
+    CPC tmax 2025
+    1446 células com sede municipal
+    CPC tmax 2014
+    CPC tmin 2014
+    CPC tmax 2015
