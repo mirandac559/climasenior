@@ -1,7 +1,7 @@
 name: Validação retrospectiva (SIH/DataSUS)
 
-# Recalcula o IVC de 2014 a 2025 para todos os municípios e o compara com as internações
-# de pessoas com 60+ no SIH/DataSUS. Disparo manual.
+# Recalcula o IVC de 2014 a 2025 para todos os municípios, compara com as internações de
+# pessoas com 60+ no SIH/DataSUS e treina o modelo de demanda. Disparo manual.
 #   piloto vazio  -> Brasil inteiro (competências 2014 a 2026), grava e republica o painel
 #   piloto "MA 2024" -> só o Maranhão em 2024, para conferir; grava em data/validacao_piloto (fora do painel)
 on:
@@ -75,7 +75,7 @@ jobs:
     needs: [preparar, internacoes]
     if: always() && needs.preparar.result == 'success' && needs.internacoes.result != 'cancelled'
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -112,8 +112,7 @@ jobs:
         run: |
           git config user.name "climasenior-bot"
           git config user.email "climasenior-bot@users.noreply.github.com"
-          if [ -n "$UFS" ]; then PASTA=data/validacao_piloto; else PASTA=data/validacao; fi
-          git add "$PASTA"
+          if [ -n "$UFS" ]; then git add data/validacao_piloto; else git add data/validacao modelos data/ref/demanda_base.csv; fi
           git diff --cached --quiet || git commit -q -m "Validação retrospectiva ${UFS:-Brasil} $(TZ=America/Sao_Paulo date '+%F %H:%M')"
           git pull -q --rebase && git push
           if [ -z "$UFS" ]; then gh workflow run atualizar.yml -f modo=painel; fi

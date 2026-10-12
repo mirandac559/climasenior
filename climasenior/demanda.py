@@ -208,9 +208,9 @@ def treinar(M: dict, log=print, fracao: float = FRACAO_TREINO, semente: int = 7)
     return modelos, meta, {"base": base_oper, "series": series}
 
 
-def gravar(modelos: dict, meta: dict, extra: dict, pasta_modelos: Path = DIR_MODELOS, pasta_ref: Path | None = None):
+def gravar(modelos: dict, meta: dict, extra: dict, pasta_modelos: Path | None = None, pasta_ref: Path | None = None):
     import joblib
-    pasta_modelos = Path(pasta_modelos)
+    pasta_modelos = Path(pasta_modelos or DIR_MODELOS)
     pasta_modelos.mkdir(parents=True, exist_ok=True)
     for g, est in modelos.items():
         joblib.dump({"modelo": est, "variaveis": VARIAVEIS, "versao": meta["versao"]}, pasta_modelos / f"demanda_{g}.joblib",
@@ -220,8 +220,9 @@ def gravar(modelos: dict, meta: dict, extra: dict, pasta_modelos: Path = DIR_MOD
     extra["base"].to_csv(pasta_ref / "demanda_base.csv", index=False)
 
 
-def carregar(pasta_modelos: Path = DIR_MODELOS):
+def carregar(pasta_modelos: Path | None = None):
     """Modelos e metadados; None se não houver modelo treinado ou o scikit-learn não estiver instalado."""
+    pasta_modelos = Path(pasta_modelos or DIR_MODELOS)
     try:
         import joblib
         meta = json.loads((Path(pasta_modelos) / "demanda.json").read_text(encoding="utf-8"))

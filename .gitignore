@@ -4,7 +4,6 @@ __pycache__/
 .venv/
 simulacao/
 site/data/
-modelos/
 data/demo/
 simulacao_br/
 .sem_alteracoes

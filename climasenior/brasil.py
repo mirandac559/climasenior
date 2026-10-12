@@ -544,6 +544,25 @@ def _consecutivos(q: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # 6. Exportação do painel
 # =============================================================================
+def demanda_prevista(r: dict, m: pd.DataFrame, P: Pastas, validos: list[int]):
+    """Internações de 60+ previstas pelo modelo de demanda (modelos/), para os dias exportados."""
+    from . import demanda as D
+    pacote = D.carregar()
+    if not pacote or not validos or validos[0] < 2 or not (P.ref / "demanda_base.csv").exists():
+        return None, None
+    mods, meta = pacote
+    base = pd.read_csv(P.ref / "demanda_base.csv", dtype={"cod_ibge": str})
+    idx = np.asarray(r["idx_cel"])
+    Em = r["E"].to_numpy(dtype=np.float32)[:, np.where(idx >= 0, idx, 0)]
+    Em[:, idx < 0] = np.nan
+    Cc = r["C"] if r["C"] is not None else np.zeros(len(m))
+    dias = r["dias"][validos[0]:validos[-1] + 1]
+    prev = D.prever(mods, base, m, dias, Em, np.round(np.asarray(r["ivc"], dtype=np.float32)), r["S"], Cc, validos[0])
+    resumo = {"versao": meta.get("versao"), "treinado_em": meta.get("treinado_em"), "periodos": meta.get("periodos"),
+              "base_operacional": meta.get("base_operacional"), "algoritmo": meta.get("algoritmo")}
+    return prev, resumo
+
+
 def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date, modo: str,
              avisos: list, extra: dict) -> list[str]:
     site = P.site
@@ -564,14 +583,18 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
     cod_f = {"cpc": "o", "modelo": "m", "previsao": "p"}
     lista_dias = []
     (site / "dia").mkdir(parents=True, exist_ok=True)
+    dem, meta_dem = demanda_prevista(r, m, P, validos)
     for k in validos:
         d = dias[k]
         f = r["fonte"].iloc[k].map(cod_f).fillna("-")
         dom = f.value_counts().index[0] if len(f) else "-"
-        _gravar_json(site / "dia" / f"{d:%Y-%m-%d}.json", {
-            "d": f"{d:%Y-%m-%d}", "f": dom, "ivc": _lista(r["ivc"][k], 0),
-            "tmax": _lista(r["tx"].iloc[k], 1), "sev": _lista(r["sev"].iloc[k], 2),
-            "dc": [int(x) for x in r["consec"].iloc[k]]})
+        reg = {"d": f"{d:%Y-%m-%d}", "f": dom, "ivc": _lista(r["ivc"][k], 0),
+               "tmax": _lista(r["tx"].iloc[k], 1), "sev": _lista(r["sev"].iloc[k], 2),
+               "dc": [int(x) for x in r["consec"].iloc[k]]}
+        if dem is not None:             # internações previstas (centésimos), todas as causas clínicas e sensíveis ao calor
+            reg["dem"] = _lista(dem["todas"][k - validos[0]] * 100, 0)
+            reg["demc"] = _lista(dem["calor"][k - validos[0]] * 100, 0)
+        _gravar_json(site / "dia" / f"{d:%Y-%m-%d}.json", reg)
         lista_dias.append([f"{d:%Y-%m-%d}", dom])
 
     for ano in sorted({dias[k].year for k in validos}):
@@ -603,7 +626,7 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
         "data_referencia": hoje.isoformat(), "dias": lista_dias,
         "n_municipios": int(len(m)), "n_celulas": int(len(cel)),
         "ultimo_dia_cpc": extra.get("cpc_fim"), "pesos": r["pesos"], "limiar": C.LIMIAR_ACAO,
-        "capacidade_disponivel": r["C"] is not None, "avisos": avisos,
+        "capacidade_disponivel": r["C"] is not None, "avisos": avisos, "demanda": meta_dem,
         "pendencias": {"celula_dias_faltando": extra.get("pendentes"), "celulas_sem_vies": extra.get("sem_vies")},
         "vies_modelo": {"tmax_mediana": _r(vies["vies_tmax"].median(), 2) if vies is not None and len(vies) else None,
                         "tmax_p10": _r(vies["vies_tmax"].quantile(.1), 2) if vies is not None and len(vies) else None,

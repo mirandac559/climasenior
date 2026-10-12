@@ -386,6 +386,7 @@ def main():
     a2.add_argument("--nao-gravar", action="store_true")
     a2.add_argument("--saida", help="pasta dos resultados (padrão: data/validacao; no piloto, data/validacao_piloto)")
     a2.add_argument("--n-boot", type=int, default=N_BOOT)
+    a2.add_argument("--sem-demanda", action="store_true", help="não treina o modelo de demanda")
     a = ap.parse_args()
     if a.cmd == "sih":
         man = SIH.coletar(a.ano, Path(a.saida), ufs=a.ufs.split(",") if a.ufs else None,
@@ -410,10 +411,27 @@ def main():
     print(f"  {len(sih):,} combinações município-dia; {resumo['arquivos_lidos']} arquivos, "
           f"{resumo['arquivos_com_falha']} com falha".replace(",", "."), flush=True)
     print("[3/3] Análise", flush=True)
+    lg = lambda *x: print(*x, flush=True)   # noqa: E731
+    M = matrizes(E, datas, cels, m, P, sih, inicio, fim, log=lg)
     res, series = analisar(E, datas, cels, m, P, sih, resumo, inicio, fim,
-                           ufs=a.ufs.split(",") if a.ufs else None, n_boot=a.n_boot,
-                           log=lambda *x: print(*x, flush=True))
+                           ufs=a.ufs.split(",") if a.ufs else None, n_boot=a.n_boot, log=lg, M=M)
     resumo_txt = texto_resumo(res)
+    if not a.ufs and not a.sem_demanda:
+        from . import demanda as D
+        print("[+] Modelo de demanda (treino até 2022, validação 2023-2024, teste 2025)", flush=True)
+        mods, meta_d, extra = D.treinar(M, log=lg)
+        for area, v in extra["series"].items():
+            if area in series:
+                series[area].update(v)
+        res["demanda"] = {g: {k: meta_d["grupos"][g][k] for k in ("nome", "com_clima", "sem_clima")} for g in meta_d["grupos"]}
+        res["demanda_info"] = {k: meta_d[k] for k in ("algoritmo", "periodos", "variaveis", "linhas_treino", "base_operacional")}
+        if not a.nao_gravar:
+            D.gravar(mods, meta_d, extra)
+        for g, x in meta_d["grupos"].items():
+            t, s0 = x["com_clima"]["teste"], x["sem_clima"]["teste"]
+            resumo_txt += (f"\nDemanda {g} (teste 2025): D² {t['d2']:.3f} (sem clima {s0['d2']:.3f}); MAE UF-dia {t['uf_dia']['mae']:.1f}; "
+                           f"MAPE UF-dia {t['uf_dia']['mape']:.1f}%; dias altos F1 {t['dias_altos']['f1']:.2f}; "
+                           f"razão nos dias de alerta {t['alerta_razao']:.3f} (sem clima {s0['alerta_razao']:.3f})")
     print(resumo_txt, flush=True)
     aviso_actions(f"Validação {'piloto ' + a.ufs + ' ' + (a.anos or '') if a.ufs else 'Brasil'}", resumo_txt)
     if not a.nao_gravar:
