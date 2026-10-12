@@ -85,6 +85,9 @@ tbody tr.sel td{background:var(--realce-forte);font-weight:600}
 .link{border:none;background:none;padding:0;font:inherit;color:var(--azul-esc);text-decoration:underline;cursor:pointer}
 .botao{border:1px solid var(--line);background:var(--card);color:var(--azul-esc);font:inherit;font-size:12px;font-weight:600;border-radius:6px;padding:5px 10px;cursor:pointer;margin-bottom:8px}
 .botao:hover{background:var(--realce)}
+.cab-card{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.cab-card h3{margin:0}
+.cab-card .botao{margin:0}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 .pill.f-MODERADA{color:#2b2100}
 .tbl-wrap{overflow:auto;max-height:470px}
@@ -174,7 +177,7 @@ td small{color:var(--muted);font-weight:400}
         <div class="mapa-wrap"><canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC"></canvas></div>
       </div>
       <div class="card">
-        <div class="val-topo"><div><h3>Painel de situação</h3></div><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
+        <div class="cab-card"><h3>Painel de situação</h3><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
         <div class="sub" id="tabData"></div>
         <div class="tbl-wrap"><table id="tab"><thead><tr><th>Município</th><th>UF</th><th class="n">IVC</th><th>Faixa</th><th class="n">Tmáx</th><th class="n">Dias</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -400,7 +403,7 @@ async function atualizar(){
     const soma = a => ix.reduce((s, i) => s + (a[i] || 0), 0) / 100;
     const t = soma(D.dem), c = soma(D.demc || []);
     $("k5").textContent = fmt(t, t < 10 ? 1 : 0);
-    $("k5s").textContent = `por dia, urgência, todas as causas clínicas; ${fmt(c, c < 10 ? 1 : 0)} por causas sensíveis ao calor (modelo de demanda)`;
+    $("k5s").textContent = `por dia (urgência, todas as causas clínicas), das quais ${fmt(c, c < 10 ? 1 : 0)} por causas sensíveis ao calor`;
   }
   tabela(vals, d);
   desenharMapa(D);
