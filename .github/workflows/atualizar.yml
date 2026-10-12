@@ -1,0 +1,55 @@
+name: Atualizar ClimaSênior
+
+# Roda todo dia às 06:00 de São Luís (09:00 UTC) e também sob demanda.
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write     # gravar a série diária em data/
+  pages: write        # publicar o painel
+  id-token: write
+
+concurrency:
+  group: climasenior
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-operacional.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements-operacional.txt
+
+      - name: Testes
+        run: pip install pytest && python -m pytest tests/test_operacional.py -q
+
+      - name: Buscar dados e calcular o IVC
+        run: python -m climasenior.operacional
+
+      - name: Registrar a série no repositório
+        run: |
+          git config user.name "climasenior-bot"
+          git config user.email "climasenior-bot@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "Atualização diária $(TZ=America/Fortaleza date +%F)"
+          git push
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: publicacao
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,4 @@
+# Operação diária (GitHub Actions ou servidor): só o necessário
+pandas>=2.2
+numpy>=1.26
+requests>=2.31

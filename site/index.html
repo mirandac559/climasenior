@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ClimaSênior</title>
+<meta name="description" content="Boletim diário de vulnerabilidade ao calor da população idosa na Região Metropolitana da Grande São Luís (MA).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: boletim operacional — cabeçalho com a data do boletim, matriz municípios x dias
+   como peça central, detalhe do município escolhido abaixo, método e fontes ao fim. */
+:root{
+  --chao:#f3f5f7; --papel:#ffffff; --tinta:#16212b; --tinta-2:#46545f; --tinta-3:#6b7884;
+  --linha:#dbe1e6; --acento:#14507d; --acento-suave:#e3edf5; --hoje:#14507d;
+  --baixa:#0ca30c; --moderada:#fab219; --alta:#ec835a; --muito-alta:#d03b3b;
+  --serie:#2a78d6; --temp:#eb6834; --aviso-fundo:#fff4dc; --aviso-tinta:#6a4500;
+  --f-texto:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-dado:"Atkinson Hyperlegible Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --raio:6px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --chao:#0f151b; --papel:#17202a; --tinta:#e8edf1; --tinta-2:#b4bfc8; --tinta-3:#8b97a2;
+  --linha:#2b3743; --acento:#7fb6e3; --acento-suave:#1d2c3a; --hoje:#9cc8ee;
+  --serie:#3987e5; --temp:#d95926; --aviso-fundo:#3a2c10; --aviso-tinta:#ffd88f; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --chao:#0f151b; --papel:#17202a; --tinta:#e8edf1; --tinta-2:#b4bfc8; --tinta-3:#8b97a2;
+  --linha:#2b3743; --acento:#7fb6e3; --acento-suave:#1d2c3a; --hoje:#9cc8ee;
+  --serie:#3987e5; --temp:#d95926; --aviso-fundo:#3a2c10; --aviso-tinta:#ffd88f; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--chao);color:var(--tinta);font-family:var(--f-texto);font-size:16px;line-height:1.5}
+.pagina{max-width:1240px;margin:0 auto;padding-inline:max(16px,3vw);padding-block:0 48px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+h2{font-size:1.15rem}
+.num{font-family:var(--f-dado);font-variant-numeric:tabular-nums}
+.rotulo{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--tinta-3);font-weight:700}
+a{color:var(--acento)}
+:focus-visible{outline:3px solid var(--acento);outline-offset:2px}
+
+/* Cabeçalho do boletim */
+.topo{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;padding-block:28px 18px;border-bottom:2px solid var(--tinta)}
+.topo h1{font-size:2rem;letter-spacing:-.01em}
+.topo .sub{color:var(--tinta-2);margin-top:4px;max-width:60ch}
+.boletim{display:grid;gap:2px;text-align:right}
+.boletim .data{font-size:1.35rem;font-weight:700}
+.estado{display:flex;flex-wrap:wrap;gap:8px 20px;padding-block:10px;color:var(--tinta-2);font-size:.88rem}
+.estado span b{color:var(--tinta);font-weight:700}
+.aviso{background:var(--aviso-fundo);color:var(--aviso-tinta);padding:10px 14px;border-radius:var(--raio);margin-block:12px;font-size:.92rem}
+
+/* Resumo */
+.resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-block:18px}
+.bloco{background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio);padding:14px 16px;min-width:0}
+.bloco .valor{font-size:1.9rem;font-weight:700;line-height:1.1;margin-top:4px}
+.bloco .nota{color:var(--tinta-2);font-size:.88rem;margin-top:2px}
+
+/* Matriz municípios x dias */
+.secao{margin-top:28px}
+.secao-cab{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.legenda{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;color:var(--tinta-2)}
+.legenda i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.rolagem{overflow-x:auto;background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio)}
+table.matriz{border-collapse:separate;border-spacing:2px;font-size:.85rem;min-width:100%}
+.matriz th,.matriz td{padding:0;text-align:center;white-space:nowrap}
+.matriz thead th{font-weight:400;color:var(--tinta-3);padding:8px 2px 4px;font-size:.75rem;line-height:1.25}
+.matriz thead th.hoje{color:var(--hoje);font-weight:700}
+.matriz th.mun{position:sticky;left:0;z-index:1;background:var(--papel);text-align:left;padding:0 10px;font-weight:700;color:var(--tinta);min-width:170px}
+.matriz tbody tr{cursor:pointer}
+.matriz tbody tr:hover th.mun,.matriz tbody tr.sel th.mun{color:var(--acento)}
+.matriz tbody tr.sel th.mun{box-shadow:inset 3px 0 0 var(--acento)}
+.cel{width:44px;height:34px;border-radius:3px;font-family:var(--f-dado);font-variant-numeric:tabular-nums;font-weight:600;color:#111;position:relative}
+.cel.f-BAIXA{background:var(--baixa);color:#fff}
+.cel.f-MODERADA{background:var(--moderada)}
+.cel.f-ALTA{background:var(--alta)}
+.cel.f-MUITO_ALTA{background:var(--muito-alta);color:#fff}
+.cel.vazio{background:transparent;color:var(--tinta-3);font-weight:400}
+.cel.prev{background-image:repeating-linear-gradient(135deg,transparent 0 5px,rgba(255,255,255,.22) 5px 7px)}
+.cel.hoje{outline:2px solid var(--tinta);outline-offset:1px}
+.matriz td.pico{font-family:var(--f-dado);padding:0 10px;color:var(--tinta-2)}
+.marca-prev{color:var(--tinta-3);font-size:.78rem;padding:6px 10px}
+
+/* Detalhe */
+.detalhe{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+@media (max-width:900px){.detalhe{grid-template-columns:1fr}}
+.graficos{display:grid;gap:12px;min-width:0}
+.grafico{background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio);padding:14px 14px 8px;min-width:0}
+.grafico h3{font-size:.95rem}
+.grafico .exp{color:var(--tinta-2);font-size:.82rem;margin:2px 0 8px}
+.caixa-graf{position:relative;height:230px}
+.ficha{background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio);padding:16px;display:grid;gap:12px}
+.ficha h3{font-size:1.2rem}
+.par{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--linha);padding-bottom:6px;font-size:.92rem}
+.par span:first-child{color:var(--tinta-2)}
+.selo{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700;font-size:.85rem;color:#111}
+.selo.f-BAIXA,.selo.f-MUITO_ALTA{color:#fff}
+.conduta{font-size:.92rem;color:var(--tinta)}
+.controles{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+select,button{font:inherit;color:var(--tinta);background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio);padding:6px 10px}
+button{cursor:pointer}
+button[aria-pressed="true"]{background:var(--acento-suave);border-color:var(--acento);color:var(--acento);font-weight:700}
+
+/* Protocolo e método */
+.faixas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.faixa{background:var(--papel);border:1px solid var(--linha);border-radius:var(--raio);padding:12px 14px;display:grid;gap:6px;align-content:start}
+.faixa .cab{display:flex;align-items:center;gap:8px;font-weight:700}
+.faixa .cab i{width:14px;height:14px;border-radius:3px;display:inline-block}
+.faixa p{margin:0;font-size:.9rem;color:var(--tinta-2)}
+.texto{max-width:72ch;color:var(--tinta-2);font-size:.95rem}
+.texto p{margin:.5em 0}
+.texto strong{color:var(--tinta)}
+.fontes{display:grid;gap:6px;font-size:.9rem;color:var(--tinta-2);padding-left:1.1em;margin:.5em 0}
+table.dados{border-collapse:collapse;font-size:.82rem;width:100%}
+.dados th,.dados td{padding:4px 8px;border-bottom:1px solid var(--linha);text-align:right;white-space:nowrap}
+.dados th:first-child,.dados td:first-child{text-align:left}
+.dados th{color:var(--tinta-3);font-weight:700}
+.rodape{margin-top:36px;padding-top:14px;border-top:1px solid var(--linha);color:var(--tinta-3);font-size:.85rem;display:grid;gap:4px}
+.vazio-geral{background:var(--papel);border:1px dashed var(--linha);border-radius:var(--raio);padding:28px;margin-top:24px;max-width:70ch}
+.dica{position:fixed;pointer-events:none;z-index:20;background:var(--tinta);color:var(--papel);border-radius:var(--raio);padding:8px 10px;font-size:.82rem;line-height:1.4;max-width:260px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="pagina">
+  <header class="topo">
+    <div>
+      <h1>ClimaSênior</h1>
+      <div class="sub">Boletim diário de vulnerabilidade ao calor da população idosa · Região Metropolitana da Grande São Luís (MA)</div>
+    </div>
+    <div class="boletim">
+      <span class="rotulo">Boletim de</span>
+      <span class="data num" id="dataBoletim">–</span>
+    </div>
+  </header>
+  <div class="estado" id="estado"></div>
+  <div id="avisos"></div>
+
+  <main id="conteudo">
+    <section class="resumo" aria-label="Resumo">
+      <div class="bloco"><div class="rotulo">Municípios em alerta</div><div class="valor num" id="r1">–</div><div class="nota" id="r1n"></div></div>
+      <div class="bloco"><div class="rotulo">Maior IVC nos próximos 3 dias</div><div class="valor num" id="r2">–</div><div class="nota" id="r2n"></div></div>
+      <div class="bloco"><div class="rotulo">Pessoas com 60 anos ou mais nos municípios em alerta</div><div class="valor num" id="r3">–</div><div class="nota" id="r3n">Censo 2022</div></div>
+    </section>
+
+    <section class="secao" aria-labelledby="tMatriz">
+      <div class="secao-cab">
+        <h2 id="tMatriz">Índice de Vulnerabilidade Climática por município e dia</h2>
+        <div class="legenda" id="legenda"></div>
+      </div>
+      <div class="rolagem"><table class="matriz" id="matriz"></table></div>
+      <div class="marca-prev">Células listradas são previsão. Valores de 0 a 100; o protocolo é acionado a partir de <span class="num" id="limiarTxt">60</span>. Clique num município para ver o detalhe.</div>
+    </section>
+
+    <section class="secao" aria-labelledby="tDet">
+      <div class="secao-cab">
+        <h2 id="tDet">Detalhe do município</h2>
+        <div class="controles">
+          <label for="selMun" class="rotulo">Município</label>
+          <select id="selMun"></select>
+          <label for="selAno" class="rotulo">Ano</label>
+          <select id="selAno"></select>
+          <button type="button" id="btTabela" aria-pressed="false">Ver tabela</button>
+        </div>
+      </div>
+      <div class="detalhe">
+        <div class="graficos">
+          <div class="grafico">
+            <h3>IVC diário</h3>
+            <div class="exp">Linhas horizontais nos limites das faixas (40, 60, 80). Trecho tracejado: previsão.</div>
+            <div class="caixa-graf"><canvas id="gIvc" aria-label="Gráfico do IVC diário"></canvas></div>
+          </div>
+          <div class="grafico">
+            <h3>Temperatura média de 3 dias e limiar local</h3>
+            <div class="exp">Quando a média dos três dias seguintes passa do percentil 95 local (linha cinza), começa a onda de calor medida pelo EHF.</div>
+            <div class="caixa-graf"><canvas id="gTemp" aria-label="Gráfico da temperatura média de três dias"></canvas></div>
+          </div>
+          <div class="grafico" id="caixaTabela" hidden>
+            <h3>Últimos 30 dias e previsão</h3>
+            <div class="rolagem" style="border:0"><table class="dados" id="tabela"></table></div>
+          </div>
+        </div>
+        <aside class="ficha" id="ficha" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="tProt">
+      <div class="secao-cab"><h2 id="tProt">Protocolo de resposta graduada</h2><span class="rotulo">Proposta em pactuação com gestores</span></div>
+      <div class="faixas" id="faixas"></div>
+    </section>
+
+    <section class="secao texto" aria-labelledby="tMet">
+      <h2 id="tMet">Como o índice é calculado</h2>
+      <p><strong>Exposição.</strong> Usa o Fator de Excesso de Calor (EHF; Nairn e Fawcett, 2015). Para cada dia, compara a temperatura média dos três dias seguintes com o percentil 95 do próprio município no período de 2014 a 2025 e com a média dos 30 dias anteriores, que mede a aclimatação. A persistência do calor pesa mais que o pico de um dia.</p>
+      <p><strong>Sensibilidade.</strong> Proporção de pessoas com 60 e com 80 anos ou mais (Censo 2022), relativa ao município da região com a maior proporção.</p>
+      <p><strong>Capacidade de resposta.</strong> Estabelecimentos de atenção básica por habitante (CNES), quando carregados. Sem esse dado, o índice usa só exposição e sensibilidade, e o boletim informa.</p>
+      <p><strong>Dados.</strong> A série começa em 1º de janeiro de 2026 e cresce a cada dia. Os dias já consolidados vêm da reanálise ERA5; os últimos dias e a previsão de 16 dias vêm do modelo de previsão, com correção do desvio médio do modelo em relação ao ERA5.</p>
+      <p><strong>Limites.</strong> O índice descreve municípios, não pessoas. A calibração dos limiares com internações e óbitos do DataSUS está em andamento, porque esses registros chegam com meses de atraso.</p>
+      <ul class="fontes" id="fontes"></ul>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <span>ClimaSênior · código aberto · <span id="versao"></span></span>
+    <span>O presente trabalho foi realizado com apoio do Itaú Viver Mais e Portal do Envelhecimento.</span>
+    <span>Dados meteorológicos por Open-Meteo.com (CC BY 4.0), com reanálise ERA5 (Copernicus/ECMWF). Dados demográficos: IBGE.</span>
+  </footer>
+</div>
+<div class="dica" id="dica" hidden></div>
+
+<script>
+(() => {
+const FAIXAS = [
+  {r:"BAIXA", de:0, ate:39, var:"--baixa", c:"Monitoramento de rotina; ações educativas permanentes."},
+  {r:"MODERADA", de:40, ate:59, var:"--moderada", c:"Comunicação preventiva a idosos e cuidadores; checagem de insumos de hidratação nas unidades."},
+  {r:"ALTA", de:60, ate:79, var:"--alta", c:"Reforço de equipes na atenção básica; busca ativa de idosos em isolamento; articulação com assistência social e defesa civil."},
+  {r:"MUITO ALTA", de:80, ate:100, var:"--muito-alta", c:"Pontos de apoio com hidratação e climatização; contato dirigido a idosos com comorbidades; retaguarda hospitalar preparada."}
+];
+const FONTE = {era5:"reanálise ERA5", modelo:"modelo (provisório)", previsao:"previsão", e:"reanálise ERA5", m:"modelo (provisório)", p:"previsão"};
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const faixa = v => v == null ? null : FAIXAS.find(f => v >= f.de && v <= f.ate + 0.999) || FAIXAS[3];
+const classe = f => "f-" + (f ? f.r.replace(" ", "_") : "");
+const fmt = (n, d=0) => n == null ? "–" : n.toLocaleString("pt-BR", {minimumFractionDigits:d, maximumFractionDigits:d});
+const dataBR = s => { const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`; };
+const DSEM = ["dom","seg","ter","qua","qui","sex","sáb"];
+const diaSem = s => DSEM[new Date(s + "T00:00:00Z").getUTCDay()];
+
+let META, ATUAL, SERIES = {}, sel = null, gIvc = null, gTemp = null;
+
+async function carregar(nome){
+  const r = await fetch("data/" + nome, {cache:"no-cache"});
+  if(!r.ok) throw new Error(nome + ": HTTP " + r.status);
+  return r.json();
+}
+
+function vazio(msg){
+  $("conteudo").innerHTML = `<div class="vazio-geral"><h2>Os dados aparecem após a primeira atualização</h2>
+  <p>${msg}</p><p>Para gerar os arquivos, execute <code>python -m climasenior.operacional</code> ou acione o fluxo
+  “Atualizar ClimaSênior” no GitHub Actions. Para testar sem rede: <code>python -m climasenior.operacional --simular</code>
+  e abra <code>simulacao/site</code> com <code>python -m http.server</code>.</p></div>`;
+}
+
+function cabecalho(){
+  $("dataBoletim").textContent = dataBR(ATUAL.data_referencia) + ", " + diaSem(ATUAL.data_referencia);
+  const g = new Date(META.gerado_em);
+  $("estado").innerHTML = `<span>Atualizado em <b class="num">${g.toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short",timeZone:"America/Fortaleza"})}</b></span>
+    <span>Reanálise até <b class="num">${META.ultima_data_era5 ? dataBR(META.ultima_data_era5) : "–"}</b></span>
+    <span>Previsão até <b class="num">${dataBR(META.ultima_data_previsao)}</b></span>
+    <span>Limiar de ação <b class="num">${META.limiar}</b></span>`;
+  const av = [];
+  if(META.modo !== "real") av.push("<b>Simulação.</b> Este painel foi gerado com dados simulados para teste do sistema. Os municípios têm códigos fictícios e os valores não descrevem a realidade.");
+  (META.avisos || []).forEach(a => av.push(a + "."));
+  $("avisos").innerHTML = av.map(a => `<div class="aviso">${a}</div>`).join("");
+  $("limiarTxt").textContent = META.limiar;
+  $("versao").textContent = "versão " + META.versao;
+  $("fontes").innerHTML = (META.fontes||[]).map(f => `<li><a href="${f.url}" target="_blank" rel="noopener">${f.nome}</a>${f.licenca ? " (" + f.licenca + ")" : ""}: ${f.uso}.</li>`).join("");
+}
+
+function resumo(){
+  const m = ATUAL.municipios;
+  const al = m.filter(x => x.alerta);
+  const topo = m.reduce((a,b) => (b.ivc_max_horizonte ?? -1) > (a.ivc_max_horizonte ?? -1) ? b : a, m[0]);
+  $("r1").textContent = `${al.length} de ${m.length}`;
+  $("r1n").textContent = al.length ? `IVC ≥ ${ATUAL.limiar} entre hoje e ${ATUAL.horizonte_alerta} dias à frente` : "Nenhum município acima do limiar no horizonte de 3 dias";
+  $("r2").textContent = fmt(topo.ivc_max_horizonte);
+  $("r2n").textContent = topo.dia_pico ? `${topo.nome}, ${dataBR(topo.dia_pico)} · ${topo.faixa_pico}` : "";
+  $("r3").textContent = fmt(al.reduce((s,x) => s + (x.pop60||0), 0));
+}
+
+function legenda(){
+  $("legenda").innerHTML = FAIXAS.map(f => `<span><i style="background:var(${f.var})"></i>${f.r} (${f.de}–${f.ate})</span>`).join("");
+  $("faixas").innerHTML = FAIXAS.map(f => `<div class="faixa"><div class="cab"><i style="background:var(${f.var})"></i>${f.r}<span class="num" style="color:var(--tinta-3);font-weight:400">${f.de}–${f.ate}</span></div><p>${f.c}</p></div>`).join("");
+}
+
+function matriz(){
+  const hoje = ATUAL.data_referencia;
+  const ini = new Date(hoje + "T00:00:00Z");
+  const dias = [];
+  for(let i=-3;i<14;i++){ dias.push(new Date(ini.getTime() + i*864e5).toISOString().slice(0,10)); }
+  let h = `<thead><tr><th class="mun"><span class="rotulo">Município</span></th>` +
+    dias.map(d => `<th class="${d===hoje?"hoje":""}">${d===hoje?"hoje":diaSem(d)}<br><span class="num">${d.slice(8)}/${d.slice(5,7)}</span></th>`).join("") +
+    `<th><span class="rotulo">Pico 0–3 d</span></th></tr></thead><tbody>`;
+  for(const m of ATUAL.municipios){
+    const por = Object.fromEntries(m.dias.map(x => [x.d, x]));
+    h += `<tr data-cod="${m.cod_ibge}" class="${sel===m.cod_ibge?"sel":""}"><th class="mun" scope="row">${m.nome}</th>`;
+    for(const d of dias){
+      const x = por[d];
+      if(!x || x.ivc == null){ h += `<td><div class="cel vazio" data-cod="${m.cod_ibge}" data-d="${d}">·</div></td>`; continue; }
+      const f = faixa(x.ivc);
+      h += `<td><div class="cel ${classe(f)} ${x.fonte==="previsao"?"prev":""} ${d===hoje?"hoje":""}" data-cod="${m.cod_ibge}" data-d="${d}" tabindex="0" aria-label="${m.nome}, ${dataBR(d)}: IVC ${fmt(x.ivc)}, ${f.r}">${fmt(x.ivc)}</div></td>`;
+    }
+    h += `<td class="pico">${m.ivc_max_horizonte!=null ? fmt(m.ivc_max_horizonte) : "–"}</td></tr>`;
+  }
+  $("matriz").innerHTML = h + "</tbody>";
+  $("matriz").querySelectorAll("tbody tr").forEach(tr => tr.addEventListener("click", () => selecionar(tr.dataset.cod, true)));
+}
+
+function dica(e, cel){
+  const m = ATUAL.municipios.find(x => x.cod_ibge === cel.dataset.cod);
+  const x = m && m.dias.find(y => y.d === cel.dataset.d);
+  if(!x || x.ivc == null) return esconder();
+  const t = $("dica");
+  t.innerHTML = `<b>${m.nome}</b> · ${dataBR(x.d)}<br>IVC <b class="num">${fmt(x.ivc)}</b> · ${faixa(x.ivc).r}<br>Onda de calor: ${x.classe}<br>Máx <span class="num">${fmt(x.tmax,1)}</span> °C · mín <span class="num">${fmt(x.tmin,1)}</span> °C<br>Sensação máx <span class="num">${fmt(x.tapmax,1)}</span> °C<br><span style="opacity:.75">${FONTE[x.fonte]||""}</span>`;
+  t.hidden = false;
+  const r = (e && e.clientX!=null) ? {x:e.clientX, y:e.clientY} : (() => { const b = cel.getBoundingClientRect(); return {x:b.right, y:b.bottom}; })();
+  t.style.left = Math.min(r.x + 12, innerWidth - 272) + "px";
+  t.style.top = Math.min(r.y + 12, innerHeight - t.offsetHeight - 8) + "px";
+}
+function esconder(){ $("dica").hidden = true; }
+
+function ficha(){
+  const m = ATUAL.municipios.find(x => x.cod_ibge === sel);
+  const f = faixa(m.ivc_max_horizonte);
+  const cl = m.climatologia || {};
+  $("ficha").innerHTML = `<div><div class="rotulo">Município</div><h3>${m.nome}</h3></div>
+    <div>${f ? `<span class="selo ${classe(f)}" style="background:var(${f.var})">${f.r}</span> <span class="num">pico ${fmt(m.ivc_max_horizonte)}</span> em ${dataBR(m.dia_pico)}` : "Sem valor no horizonte"}</div>
+    ${f ? `<div class="conduta"><div class="rotulo">Conduta recomendada</div>${f.c}</div>` : ""}
+    <div class="par"><span>População (Censo 2022)</span><span class="num">${fmt(m.populacao)}</span></div>
+    <div class="par"><span>Pessoas com 60+</span><span class="num">${fmt(m.pop60)} (${fmt(m.prop60*100,1)}%)</span></div>
+    <div class="par"><span>Pessoas com 80+</span><span class="num">${fmt(m.prop80*100,1)}%</span></div>
+    <div class="par"><span>Percentil 95 da temp. média</span><span class="num">${fmt(cl.p95,1)} °C</span></div>
+    <div class="par"><span>Mediana da temp. média</span><span class="num">${fmt(cl.p50,1)} °C</span></div>
+    <div class="par"><span>Sensibilidade (0 a 1)</span><span class="num">${fmt(m.S,2)}</span></div>
+    <div class="par"><span>Capacidade de resposta</span><span class="num">${m.C==null ? "pendente" : fmt(m.C,2)}</span></div>`;
+}
+
+function anosSelect(){
+  $("selAno").innerHTML = (META.anos||[]).map(a => `<option value="${a}">${a}</option>`).join("");
+  $("selAno").value = String(Math.max(...META.anos));
+  $("selMun").innerHTML = ATUAL.municipios.slice().sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map(m => `<option value="${m.cod_ibge}">${m.nome}</option>`).join("");
+}
+
+async function series(){
+  const ano = $("selAno").value;
+  if(!SERIES[ano]) SERIES[ano] = await carregar(`serie_${ano}.json`);
+  const s = SERIES[ano].municipios[sel];
+  const m = ATUAL.municipios.find(x => x.cod_ibge === sel);
+  if(!s){ return; }
+  const rot = s.d.map(d => `${d.slice(8)}/${d.slice(5,7)}`);
+  const prev = s.fonte.map(f => f === "p");
+  const tinta = css("--tinta-2"), linha = css("--linha");
+  const segPrev = {borderDash: c => prev[c.p1DataIndex] ? [5,4] : undefined};
+  const comum = {responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:"index", intersect:false},
+    plugins:{legend:{display:false}, tooltip:{callbacks:{title: it => dataBR(s.d[it[0].dataIndex]) + " · " + (FONTE[s.fonte[it[0].dataIndex]]||"")}}},
+    scales:{x:{ticks:{color:tinta, maxTicksLimit:12, autoSkip:true, maxRotation:0}, grid:{display:false}}}};
+  const refs = {id:"refs", beforeDatasetsDraw(ch, a, o){ const {ctx, chartArea:{left,right}, scales:{y}} = ch;
+    (o.linhas||[]).forEach(l => { const py = y.getPixelForValue(l.v); if(py < ch.chartArea.top || py > ch.chartArea.bottom) return;
+      ctx.save(); ctx.strokeStyle = l.cor; ctx.lineWidth = 1; ctx.setLineDash(l.tr||[]); ctx.beginPath(); ctx.moveTo(left,py); ctx.lineTo(right,py); ctx.stroke(); ctx.restore(); }); }};
+  const dIvc = {labels:rot, datasets:[{label:"IVC", data:s.ivc, borderColor:css("--serie"), borderWidth:2, pointRadius:0, pointHoverRadius:5, tension:.2, segment:segPrev, spanGaps:false}]};
+  const oIvc = structuredClone({...comum, plugins:{legend:{display:false}}});
+  oIvc.plugins.tooltip = {callbacks:{title: comum.plugins.tooltip.callbacks.title, label: c => `IVC ${fmt(c.raw)} · ${faixa(c.raw)?.r||""}`}};
+  oIvc.scales.y = {min:0, max:100, ticks:{color:tinta, stepSize:20}, grid:{color:linha}};
+  oIvc.plugins.refs = {linhas:[40,60,80].map(v => ({v, cor: v===META.limiar ? css("--muito-alta") : css("--tinta-3"), tr:[2,3]}))};
+  const cl = m.climatologia;
+  const dT = {labels:rot, datasets:[{label:"Média de 3 dias (°C)", data:s.t3, borderColor:css("--temp"), borderWidth:2, pointRadius:0, pointHoverRadius:5, tension:.2, segment:segPrev}]};
+  const oT = structuredClone({...comum, plugins:{legend:{display:false}}});
+  oT.plugins.tooltip = {callbacks:{title: comum.plugins.tooltip.callbacks.title,
+    label: c => `Média de 3 dias ${fmt(c.raw,1)} °C`, afterLabel: c => { const i = c.dataIndex; const sv = s.sev[i];
+      return [`Máx ${fmt(s.tmax[i],1)} °C · mín ${fmt(s.tmin[i],1)} °C`, sv>0 ? `EHF ${fmt(s.ehf[i],2)} · severidade ${fmt(sv,2)}` : "Sem onda de calor"]; }}};
+  const vals = s.t3.filter(v => v != null);
+  oT.scales.y = {suggestedMin:Math.min(...vals, cl.p50) - .5, suggestedMax:Math.max(...vals, cl.p95) + .5, ticks:{color:tinta}, grid:{color:linha}};
+  oT.plugins.refs = {linhas:[{v:cl.p95, cor:css("--tinta-3"), tr:[]}]};
+  if(typeof Chart === "undefined"){ document.querySelectorAll(".caixa-graf").forEach(c => c.innerHTML = '<p class="exp">A biblioteca de gráficos não carregou. Use "Ver tabela".</p>'); }
+  else {
+    gIvc && gIvc.destroy(); gTemp && gTemp.destroy();
+    gIvc = new Chart($("gIvc"), {type:"line", data:dIvc, options:oIvc, plugins:[refs]});
+    gTemp = new Chart($("gTemp"), {type:"line", data:dT, options:oT, plugins:[refs]});
+  }
+  tabela(s);
+}
+
+function tabela(s){
+  const hoje = ATUAL.data_referencia;
+  const idx = s.d.map((d,i) => i).filter(i => s.d[i] >= new Date(new Date(hoje).getTime() - 30*864e5).toISOString().slice(0,10));
+  $("tabela").innerHTML = `<thead><tr><th>Data</th><th>Fonte</th><th>Máx °C</th><th>Mín °C</th><th>Sensação máx °C</th><th>Média 3 d °C</th><th>EHF</th><th>IVC</th><th>Faixa</th></tr></thead><tbody>` +
+    idx.reverse().map(i => `<tr><td class="num">${dataBR(s.d[i])}</td><td>${FONTE[s.fonte[i]]||""}</td><td class="num">${fmt(s.tmax[i],1)}</td><td class="num">${fmt(s.tmin[i],1)}</td><td class="num">${fmt(s.tapmax[i],1)}</td><td class="num">${fmt(s.t3[i],1)}</td><td class="num">${fmt(s.ehf[i],2)}</td><td class="num">${fmt(s.ivc[i])}</td><td>${faixa(s.ivc[i])?.r||"–"}</td></tr>`).join("") + "</tbody>";
+}
+
+function selecionar(cod, rolar){
+  sel = cod; $("selMun").value = cod;
+  document.querySelectorAll(".matriz tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.cod === cod));
+  ficha(); series().catch(e => console.error(e));
+  if(rolar) $("tDet").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
+}
+
+async function iniciar(){
+  legenda();
+  try { [META, ATUAL] = await Promise.all([carregar("meta.json"), carregar("atual.json")]); }
+  catch(e){ vazio(location.protocol === "file:" ? "Abra o painel por um servidor web; navegadores bloqueiam a leitura de arquivos locais." : "Não encontrei os arquivos de dados (" + e.message + ")."); return; }
+  cabecalho(); resumo(); anosSelect();
+  sel = ATUAL.municipios[0].cod_ibge;
+  matriz();
+  $("matriz").addEventListener("mousemove", e => { const c = e.target.closest(".cel"); c ? dica(e, c) : esconder(); });
+  $("matriz").addEventListener("mouseleave", esconder);
+  $("matriz").addEventListener("focusin", e => { const c = e.target.closest(".cel"); c && dica(null, c); });
+  $("matriz").addEventListener("focusout", esconder);
+  $("selMun").addEventListener("change", e => selecionar(e.target.value, false));
+  $("selAno").addEventListener("change", () => series());
+  $("btTabela").addEventListener("click", e => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", on); $("caixaTabela").hidden = !on; e.currentTarget.textContent = on ? "Ocultar tabela" : "Ver tabela"; });
+  selecionar(sel, false);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => series());
+}
+iniciar();
+})();
+</script>
+</body>
+</html>
