@@ -765,7 +765,7 @@ async function iniciar(){
   $("avisos").innerHTML = av.map(a => `<div class="warn">${a}</div>`).join("");
   $("rodFontes").innerHTML = "Fontes: " + (META.fontes || []).map(f => `<a href="${f.url}" target="_blank" rel="noopener">${f.nome}</a>${f.licenca ? " (" + f.licenca + ")" : ""}`).join(" · ");
   const g = new Date(META.gerado_em);
-  $("rodVersao").textContent = `Versão ${META.versao} · atualizado em ${g.toLocaleString("pt-BR", {dateStyle:"short", timeStyle:"short", timeZone:"America/Sao_Paulo"})} (horário de Brasília) · código aberto`;
+  $("rodVersao").innerHTML = `Versão ${META.versao} · atualizado em ${g.toLocaleString("pt-BR", {dateStyle:"short", timeStyle:"short", timeZone:"America/Sao_Paulo"})} (horário de Brasília) · <a href="https://github.com/mirandac559/climasenior" target="_blank" rel="noopener">código aberto e documentação</a>`;
   preencherControles();
   await carregarValidacao();
   idxArea = municipiosDaArea(); listaMunicipios();

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Operação nacional do ClimaSênior: os 5.570 municípios do Brasil, de 2026 em diante.
+Operação nacional do ClimaSênior: os 5.571 municípios do Brasil, de 2026 em diante.
 
 Unidade climática: a célula de 0,5° da CPC Global Unified Temperature (NOAA) que
 contém a sede municipal; municípios da mesma célula compartilham a exposição.
@@ -635,7 +635,7 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
     if (P.validacao / "resultados.json").exists():          # validação retrospectiva (SIH/DataSUS)
         import shutil
         shutil.rmtree(site / "validacao", ignore_errors=True)
-        shutil.copytree(P.validacao, site / "validacao", ignore=shutil.ignore_patterns("*.npz", "*.parquet", "sih*"))
+        shutil.copytree(P.validacao, site / "validacao", ignore=shutil.ignore_patterns("*.npz", "*.parquet", "sih*", "*.txt"))
     vies = extra.get("vies")
     _gravar_json(site / "meta.json", {
         "versao": __version__, "modo": modo, "abrangencia": "Brasil",

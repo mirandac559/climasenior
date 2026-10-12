@@ -45,7 +45,7 @@ def calcular(t: pd.Series, t95: float, ehf85: float | None = None) -> pd.DataFra
 
 
 def climatologia(t: pd.Series) -> dict:
-    """Percentis de referência e EHF85 a partir de uma série longa (ERA5)."""
+    """Percentis de referência e EHF85 a partir de uma série longa (CPC, 2014-2025)."""
     t = t.astype(float).dropna()
     p50, p90, p95 = (float(np.percentile(t, q)) for q in (50, 90, 95))
     e = calcular(t, p95)["ehf"]
@@ -55,15 +55,3 @@ def climatologia(t: pd.Series) -> dict:
     return {"p50": round(p50, 3), "p90": round(p90, 3), "p95": round(p95, 3),
             "ehf85": round(float(np.percentile(pos, 85)), 4), "n_dias": int(len(t)),
             "n_ehf_positivo": int(len(pos))}
-
-
-def classe(sev: float | None) -> str:
-    if sev is None or (isinstance(sev, float) and np.isnan(sev)):
-        return "indisponível"
-    if sev <= 0:
-        return "sem onda de calor"
-    if sev < 1:
-        return "baixa intensidade"
-    if sev < 3:
-        return "severa"
-    return "extrema"

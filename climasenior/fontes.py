@@ -2,13 +2,13 @@
 """
 Conectores às fontes públicas usadas pela operação em tempo real.
 
-  * Open-Meteo  — previsão (16 dias) e janela recente do modelo; reanálise ERA5
-                  (arquivo histórico) para a climatologia e para os dias já
-                  consolidados. Licença CC BY 4.0; uso não comercial sem chave.
-                  https://open-meteo.com/en/docs
-  * IBGE        — API de localidades (códigos dos municípios) e API de agregados
-                  (Censo 2022, tabela 9514: população por idade).
-                  https://servicodados.ibge.gov.br/api/docs
+  * Open-Meteo  — previsão de 7 dias, janela recente do modelo e previsão histórica
+                  (lacunas entre a observação da CPC e os dias recentes); geocodificação.
+                  Licença CC BY 4.0; uso não comercial sem chave. https://open-meteo.com/en/docs
+  * IBGE        — localidades (municípios), malhas (contornos das UFs) e agregados
+                  (Censo 2022, tabela 9514: população por idade). https://servicodados.ibge.gov.br/api/docs
+  * NOAA PSL    — arquivos anuais da CPC Global Unified Temperature (ver cpc.py).
+  * kelvins/municipios-brasileiros — coordenadas das sedes municipais (MIT).
 
 Todo acesso à rede passa por um "cliente" com o método get_json(url, params).
 Na operação usa-se ClienteHTTP; nos testes e na simulação, um cliente falso
@@ -18,14 +18,11 @@ from __future__ import annotations
 import re
 import time
 import unicodedata
-from typing import Iterable
 
 import pandas as pd
 
 OPEN_METEO_PREVISAO = "https://api.open-meteo.com/v1/forecast"
-OPEN_METEO_ARQUIVO = "https://archive-api.open-meteo.com/v1/archive"
 OPEN_METEO_GEOCODIFICACAO = "https://geocoding-api.open-meteo.com/v1/search"
-IBGE_MUNICIPIOS_UF = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios"
 IBGE_AGREGADO_IDADE = ("https://servicodados.ibge.gov.br/api/v3/agregados/9514/periodos/2022/"
                        "variaveis/93")
 
@@ -128,30 +125,6 @@ def _parametros_base(locais: list[dict], fuso: str) -> dict:
             "daily": ",".join(VARIAVEIS_DIARIAS), "timezone": fuso}
 
 
-MODELO_REANALISE = "era5"   # ERA5 puro: sem ele, o arquivo completa os dias recentes com o modelo operacional
-
-
-def baixar_reanalise(cliente, locais: list[dict], inicio: str, fim: str, fuso: str) -> pd.DataFrame:
-    """ERA5 (arquivo histórico do Open-Meteo) para várias localidades. Dias ainda sem ERA5 vêm nulos."""
-    p = _parametros_base(locais, fuso) | {"start_date": inicio, "end_date": fim, "models": MODELO_REANALISE}
-    objs = _lista(cliente.get_json(OPEN_METEO_ARQUIVO, p))
-    if len(objs) != len(locais):
-        raise ErroFonte(f"ERA5: esperadas {len(locais)} localidades, recebidas {len(objs)}")
-    return pd.concat([_diario_para_df(o, m["cod_ibge"]) for o, m in zip(objs, locais)],
-                     ignore_index=True)
-
-
-def baixar_previsao(cliente, locais: list[dict], dias_passados: int, dias_previsao: int,
-                    fuso: str) -> pd.DataFrame:
-    """Modelo de previsão: janela recente (dias_passados) + previsão (dias_previsao)."""
-    p = _parametros_base(locais, fuso) | {"past_days": dias_passados, "forecast_days": dias_previsao}
-    objs = _lista(cliente.get_json(OPEN_METEO_PREVISAO, p))
-    if len(objs) != len(locais):
-        raise ErroFonte(f"Previsão: esperadas {len(locais)} localidades, recebidas {len(objs)}")
-    return pd.concat([_diario_para_df(o, m["cod_ibge"]) for o, m in zip(objs, locais)],
-                     ignore_index=True)
-
-
 def geocodificar(cliente, nome: str, uf_nome: str = "Maranhão") -> tuple[float, float] | None:
     """Coordenadas da sede pelo serviço de geocodificação do Open-Meteo (auditoria)."""
     r = cliente.get_json(OPEN_METEO_GEOCODIFICACAO,
@@ -168,19 +141,6 @@ def geocodificar(cliente, nome: str, uf_nome: str = "Maranhão") -> tuple[float,
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
     return re.sub(r"\s+", " ", s).strip().lower()
-
-
-def resolver_codigos(cliente, nomes: Iterable[str], uf: int = 21) -> dict[str, str]:
-    """Nome -> código IBGE de 7 dígitos, pela API de localidades (UF 21 = Maranhão)."""
-    lista = cliente.get_json(IBGE_MUNICIPIOS_UF.format(uf=uf))
-    por_nome = {_norm(m["nome"]): str(m["id"]) for m in lista}
-    saida, faltam = {}, []
-    for n in nomes:
-        c = por_nome.get(_norm(n))
-        (saida.__setitem__(n, c) if c else faltam.append(n))
-    if faltam:
-        raise ErroFonte(f"IBGE: municípios não encontrados: {faltam}")
-    return saida
 
 
 _FAIXA = re.compile(r"^(\d+) a (\d+) anos$")
