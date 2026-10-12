@@ -1,8 +1,5 @@
 [ClimaSênior 0.5.0 · Brasil] referência 2026-10-12 | modo real | orçamento 4500 chamadas
 [1/5] Território e população
-  municípios do Brasil (IBGE)
-    5571 municípios
-  população por idade (IBGE, Censo 2022), por UF
 [2/5] Climatologia e células
   climatologia CPC 2014-2025 (grade de 0,5°)
     CPC tmax 2025
@@ -10,3 +7,36 @@
     CPC tmax 2014
     CPC tmin 2014
     CPC tmax 2015
+    CPC tmin 2015
+    CPC tmax 2016
+    CPC tmin 2016
+    CPC tmax 2017
+    CPC tmin 2017
+    CPC tmax 2018
+    CPC tmin 2018
+    CPC tmax 2019
+    CPC tmin 2019
+    CPC tmax 2020
+    CPC tmin 2020
+    CPC tmax 2021
+    CPC tmin 2021
+    CPC tmax 2022
+    CPC tmin 2022
+    CPC tmax 2023
+    CPC tmin 2023
+    CPC tmax 2024
+    CPC tmin 2024
+    CPC tmin 2025
+[3/5] Observação CPC do ano corrente
+  CPC 2026 atualizada (Mon, 12 Oct 2026 15:41:42 GMT)
+    CPC tmax 2026
+    CPC tmin 2026
+    284 dias, até 2026-10-11
+[4/5] Modelo: previsão, lacunas e desvio
+  previsão de 7 dias e 7 dias anteriores: 1446 células
+  desvio do modelo frente à CPC (2026-10-05 a 2026-10-11): 1446 células
+  lacunas 2026-03-29 a 2026-04-11: 1 células
+  lacunas 2026-09-09 a 2026-09-22: 31 células
+[5/5] EHF, IVC e painel
+  289 dias no painel | hoje: 403 municípios com IVC >= 60; IVC máximo 92
+  chamadas restantes: 1576
