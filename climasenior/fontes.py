@@ -29,6 +29,12 @@ IBGE_MUNICIPIOS_UF = "https://servicodados.ibge.gov.br/api/v1/localidades/estado
 IBGE_AGREGADO_IDADE = ("https://servicodados.ibge.gov.br/api/v3/agregados/9514/periodos/2022/"
                        "variaveis/93")
 
+OPEN_METEO_HISTORICO = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+IBGE_MUNICIPIOS_BR = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+IBGE_MALHA_BR = "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR"
+COORDENADAS_MUNICIPIOS = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/municipios.csv"
+CPC_ARQUIVO = "https://downloads.psl.noaa.gov/Datasets/cpc_global_temp/{var}.{ano}.nc"
+
 VARIAVEIS_DIARIAS = ["temperature_2m_max", "temperature_2m_min", "apparent_temperature_max"]
 
 
@@ -58,6 +64,24 @@ class ClienteHTTP:
                 ultimo = e
                 time.sleep(self.espera * (2 ** n))
         raise ErroFonte(f"Falha após {self.tentativas} tentativas: {url} ({ultimo})")
+
+    def get_text(self, url: str) -> str:
+        r = self._s.get(url, timeout=self.timeout)
+        r.raise_for_status()
+        r.encoding = r.encoding or "utf-8"
+        return r.text
+
+    def baixar(self, url: str, destino) -> None:
+        """Baixa um arquivo grande em partes, sem carregá-lo na memória."""
+        with self._s.get(url, stream=True, timeout=600) as r:
+            r.raise_for_status()
+            with open(destino, "wb") as f:
+                for parte in r.iter_content(1 << 20):
+                    f.write(parte)
+
+    def ultima_modificacao(self, url: str) -> str | None:
+        r = self._s.head(url, timeout=self.timeout, allow_redirects=True)
+        return r.headers.get("Last-Modified") if r.ok else None
 
 
 # ----------------------------------------------------------------------------
@@ -151,13 +175,13 @@ _FAIXA = re.compile(r"^(\d+) a (\d+) anos$")
 _MAIS = re.compile(r"^(\d+) anos ou mais$")
 
 
-def populacao_por_idade(cliente, codigos: list[str]) -> pd.DataFrame:
+def populacao_por_idade(cliente, codigos: list[str] | None = None, localidades: str | None = None) -> pd.DataFrame:
     """
     Censo 2022 (tabela 9514): população total, 60+ e 80+ por município.
     Usa os rótulos das categorias de idade (não os códigos), somando grupos
     quinquenais quando a categoria agregada não existir; confere a soma.
     """
-    p = {"localidades": f"N6[{','.join(codigos)}]", "classificacao": "287[all]"}
+    p = {"localidades": localidades or f"N6[{','.join(codigos)}]", "classificacao": "287[all]"}
     resp = cliente.get_json(IBGE_AGREGADO_IDADE, p)
     linhas = []  # (cod, rotulo, valor)
     for var in resp:
@@ -207,3 +231,78 @@ def populacao_por_idade(cliente, codigos: list[str]) -> pd.DataFrame:
         saida.append({"cod_ibge": cod, "populacao": int(total), "pop60": int(p60),
                       "pop80": int(p80), "prop60": round(prop60, 4), "prop80": round(p80 / total, 4)})
     return pd.DataFrame(saida)
+
+
+# ----------------------------------------------------------------------------
+# Brasil: municípios, coordenadas das sedes e contornos das UFs
+# ----------------------------------------------------------------------------
+def _uf_do_municipio(m: dict) -> str | None:
+    """A UF aparece aninhada em microrregião ou em região imediata, conforme o município."""
+    pilha = [m]
+    while pilha:
+        x = pilha.pop()
+        if isinstance(x, dict):
+            uf = x.get("UF")
+            if isinstance(uf, dict) and uf.get("sigla"):
+                return uf["sigla"]
+            pilha.extend(v for v in x.values() if isinstance(v, (dict, list)))
+        elif isinstance(x, list):
+            pilha.extend(x)
+    return None
+
+
+def municipios_brasil(cliente) -> pd.DataFrame:
+    lista = cliente.get_json(IBGE_MUNICIPIOS_BR)
+    df = pd.DataFrame([{"cod_ibge": str(m["id"]), "nome": m["nome"], "uf": _uf_do_municipio(m)} for m in lista])
+    if len(df) < 5000 and len(df) > 0 and not getattr(cliente, "simulado", False):
+        raise ErroFonte(f"IBGE: só {len(df)} municípios na lista nacional")
+    if df["uf"].isna().any():
+        raise ErroFonte(f"IBGE: UF ausente em {df['uf'].isna().sum()} municípios")
+    return df
+
+
+def coordenadas_sedes(cliente) -> pd.DataFrame:
+    """Latitude e longitude das sedes (conjunto aberto kelvins/municipios-brasileiros, MIT)."""
+    import io
+    df = pd.read_csv(io.StringIO(cliente.get_text(COORDENADAS_MUNICIPIOS)), dtype={"codigo_ibge": str})
+    return df.rename(columns={"codigo_ibge": "cod_ibge", "latitude": "lat", "longitude": "lon"})[["cod_ibge", "lat", "lon"]]
+
+
+def contornos_ufs(cliente) -> dict | None:
+    try:
+        return cliente.get_json(IBGE_MALHA_BR, {"formato": "application/vnd.geo+json",
+                                                "qualidade": "minima", "intrarregiao": "UF"})
+    except Exception:  # noqa: BLE001 - o contorno é só ilustrativo
+        return None
+
+
+def baixar_lotes(cliente, url: str, pontos: list[dict], extra: dict, fuso: str,
+                 orcamento: list[int], lote: int = 100, pausa: float = 10.5, log=None) -> pd.DataFrame:
+    """
+    Pede dados diários ao Open-Meteo em lotes de até `lote` localidades. Cada localidade
+    consome uma chamada do limite gratuito (até 14 dias e 10 variáveis por pedido).
+    `orcamento` é uma lista de um elemento (mutável) com as chamadas restantes; para
+    quando acabar. A pausa mantém o ritmo abaixo de 600 chamadas por minuto.
+    """
+    partes = []
+    for i in range(0, len(pontos), lote):
+        bloco = pontos[i:i + lote]
+        if orcamento[0] < len(bloco):
+            if log:
+                log(f"    orçamento de chamadas esgotado: {len(pontos) - i} localidades ficam para a próxima execução")
+            break
+        if partes and pausa:
+            time.sleep(pausa)
+        try:
+            objs = _lista(cliente.get_json(url, _parametros_base(bloco, fuso) | extra))
+        except ErroFonte as e:   # limite de uso ou indisponibilidade: guarda o que já veio e segue
+            if log:
+                log(f"    interrompido: {e}")
+            orcamento[0] = 0
+            break
+        if len(objs) != len(bloco):
+            raise ErroFonte(f"Open-Meteo: esperadas {len(bloco)} localidades, recebidas {len(objs)}")
+        partes += [_diario_para_df(o, p["cod_ibge"]) for o, p in zip(objs, bloco)]
+        orcamento[0] -= len(bloco)
+    return pd.concat(partes, ignore_index=True) if partes else pd.DataFrame(
+        columns=["chave", "data", "tmax", "tmin", "tapmax"])

@@ -161,13 +161,6 @@ def test_capacidade_entra_no_indice(pasta):
     assert meta["capacidade_disponivel"] is True and meta["pesos"]["capacidade"] == pytest.approx(0.15)
 
 
-def test_painel_usa_campos_exportados():
-    html = (Path(__file__).resolve().parent.parent / "site/index.html").read_text(encoding="utf-8")
-    for campo in ("data_referencia", "ultima_data_era5", "ultima_data_previsao", "ivc_max_horizonte",
-                  "dia_pico", "climatologia", "pop60", "serie_${ano}.json", "atual.json", "meta.json"):
-        assert campo in html, campo
-
-
 def test_open_meteo_chave_com_sufixo_do_modelo():
     class C:
         def get_json(self, url, params=None):

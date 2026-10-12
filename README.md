@@ -1,93 +1,77 @@
 # ClimaSênior
 
-Boletim diário de vulnerabilidade ao calor da população idosa na Região Metropolitana
-da Grande São Luís (MA). Calcula, para os 13 municípios, o **Índice de Vulnerabilidade
-Climática (IVC)** de hoje e dos próximos dias, a partir de dados públicos atualizados
-automaticamente, e indica a conduta do protocolo de resposta graduada.
+Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa nos **5.570 municípios
+do Brasil**, atualizado todos os dias desde 1º de janeiro de 2026. O painel mostra a situação do dia,
+a previsão para os próximos dias, a série de cada município e a conduta do protocolo de resposta graduada.
 
 > O presente trabalho foi realizado com apoio do Itaú Viver Mais e Portal do Envelhecimento.
 
-## O que roda todo dia
+## Como os dados chegam
 
-Às 06:00 de São Luís, o fluxo `Atualizar ClimaSênior` (GitHub Actions):
+| O quê | Fonte | Frequência |
+|---|---|---|
+| Municípios, UF e contornos | IBGE (localidades e malhas) | uma vez |
+| Coordenadas das sedes | [kelvins/municipios-brasileiros](https://github.com/kelvins/municipios-brasileiros) (MIT), com geocodificação do Open-Meteo para as que faltarem | uma vez |
+| População 60+ e 80+ | IBGE, Censo 2022, tabela 9514 | uma vez |
+| Climatologia 2014–2025 | CPC Global Unified Temperature (NOAA), grade de 0,5° | uma vez |
+| Temperatura observada de 2026 | CPC (enquanto a NOAA publicar) | diária, se houver novidade |
+| Dias recentes e previsão de 7 dias | Open-Meteo (CC BY 4.0) | diária, 06:00 de Brasília |
+| Lacunas entre a observação e os dias recentes | Open-Meteo, previsão histórica | a cada 2 horas, até completar |
 
-1. completa a série desde 01/01/2026 com a **reanálise ERA5** (dias consolidados);
-2. busca a **janela recente e a previsão de 16 dias** do modelo meteorológico e corrige
-   o desvio médio do modelo em relação ao ERA5;
-3. calcula o **Fator de Excesso de Calor (EHF)** e o **IVC** por município e dia;
-4. grava a série em `data/serie/AAAA.csv` (um arquivo por ano: 2026, 2027, ...);
-5. publica o painel no **GitHub Pages**.
+Cada município usa a célula de 0,5° (cerca de 55 km) que contém a sua sede; municípios vizinhos
+na mesma célula compartilham a exposição, e cada um tem a sua sensibilidade. O desvio médio do
+modelo de previsão em relação à observação é medido célula a célula e descontado.
 
-Na primeira execução, também resolve os códigos IBGE dos municípios, lê a população
-com 60 e 80 anos ou mais (Censo 2022) e monta a climatologia de referência
-(ERA5, 2014–2025). Isso leva alguns minutos e fica guardado em `data/ref/`.
-
-Se o fluxo ficar dias sem rodar, a execução seguinte recupera o intervalo inteiro.
-A virada de ano não exige nenhuma ação.
+O uso gratuito do Open-Meteo tem limite de 10.000 chamadas por dia. O sistema consulta uma vez por
+célula (cerca de 2.000) e respeita um teto de 9.500 por dia; o que não couber fica para a execução seguinte.
 
 ## O índice
 
-| Componente | Peso | Dado | Atualização |
-|---|---|---|---|
-| Exposição | 60% | EHF (Nairn e Fawcett, 2015) sobre a temperatura média; ERA5 e previsão via Open-Meteo | diária |
-| Sensibilidade | 25% | proporção de pessoas com 60+ e 80+ (IBGE, Censo 2022) | estrutural |
-| Capacidade de resposta | 15% | estabelecimentos de atenção básica por habitante (CNES) | opcional, `data/ref/capacidade.csv` |
+| Componente | Peso | Medida |
+|---|---|---|
+| Exposição | 60% | Fator de Excesso de Calor (Nairn e Fawcett, 2015): média dos três dias seguintes contra o percentil 95 local e contra os 30 dias anteriores |
+| Sensibilidade | 25% | proporção de pessoas com 60+ (70%) e 80+ (30%), relativa ao percentil 99 do país |
+| Capacidade de resposta | 15% | estabelecimentos de atenção básica por habitante (CNES), opcional em `data/ref/capacidade.csv` |
 
-Sem o arquivo de capacidade, o peso é redistribuído entre exposição e sensibilidade e o
-painel informa. Faixas: BAIXA (0–39), MODERADA (40–59), ALTA (60–79), MUITO ALTA (80–100);
-o protocolo é acionado a partir de 60 (`LIMIAR_ACAO` em `climasenior/config.py`).
+Sem o arquivo de capacidade, o peso é redistribuído entre exposição e sensibilidade e o painel avisa.
+Faixas: BAIXA (0–39), MODERADA (40–59), ALTA (60–79), MUITO ALTA (80–100). Limiar de ação: 60.
 
-## Publicar no GitHub Pages
-
-1. Coloque este repositório no GitHub.
-2. Em **Settings → Pages**, escolha **Source: GitHub Actions**.
-3. Em **Actions**, abra *Atualizar ClimaSênior* e clique em **Run workflow**.
-4. Ao terminar, o endereço do painel aparece no resumo da execução.
-
-## Rodar localmente
+## Rodar
 
 ```bash
 pip install -r requirements-operacional.txt
-python -m climasenior.operacional               # dados reais (precisa de internet)
+python -m climasenior.brasil                    # dados reais (a primeira execução baixa a climatologia)
+python -m climasenior.brasil --complemento      # só completa lacunas
 python -m http.server 8000 -d site              # painel em http://localhost:8000
 ```
 
-Teste sem rede, com dados simulados e municípios fictícios:
+Teste sem rede, com dados e municípios fictícios: `python -m climasenior.brasil --simular` e
+`python -m http.server 8000 -d simulacao_br/site` (copie `site/index.html` para lá).
 
-```bash
-python -m climasenior.operacional --simular
-python -m http.server 8000 -d simulacao/site
-```
+Testes: `pip install pytest scikit-learn joblib && python -m pytest tests -q`
 
-Testes: `pip install pytest && python -m pytest tests -q`
+## Publicação
 
-## Servidor da instituição
-
-`docker build -t climasenior . && docker run -p 8080:8080 -v climasenior-dados:/app/data climasenior`
-atualiza ao iniciar e todo dia às 06:00, servindo o painel na porta 8080.
+O fluxo `.github/workflows/atualizar.yml` roda às 06:00 de Brasília e a cada 2 horas para lacunas,
+grava a série em `data/clima/AAAA/AAAA-MM-DD.csv` (uma linha por célula) e publica o painel no
+GitHub Pages. O registro da última execução fica em `data/log/ultima_execucao.log`.
+Alternativa para servidor próprio: `Dockerfile`.
 
 ## Estrutura
 
 ```
-climasenior/operacional.py   orquestra a atualização diária
-climasenior/fontes.py        conectores Open-Meteo e IBGE
+climasenior/brasil.py        operação nacional (orquestração, EHF, IVC, exportação)
+climasenior/cpc.py           leitura da CPC (NetCDF)
+climasenior/fontes.py        conectores IBGE, Open-Meteo e coordenadas
 climasenior/ehf.py           Fator de Excesso de Calor
-climasenior/simulacao.py     respostas simuladas para testes
-site/index.html              painel (lê site/data/*.json)
-data/serie/, data/ref/       série diária por ano e referências (versionadas)
-.github/workflows/           atualização e publicação diárias
-climasenior/modelos.py, backtesting.py, api/, app/   módulos de pesquisa (v0.3, modo demonstração)
+climasenior/simulacao_br.py  respostas simuladas para testes
+site/index.html              painel
+climasenior/operacional.py   versão-piloto da RM de São Luís com ERA5 por sede (0.4)
+climasenior/modelos.py, backtesting.py, api/, app/   módulos de pesquisa (0.3)
 ```
-
-## Fontes e licenças
-
-- Dados meteorológicos: [Open-Meteo](https://open-meteo.com) (CC BY 4.0), com reanálise ERA5
-  (Copernicus/ECMWF). Uso gratuito não comercial; para uso intensivo por órgão público,
-  há planos com chave de API.
-- População: IBGE, Censo Demográfico 2022, tabela 9514; códigos de município: API de localidades do IBGE.
-- Código: licença MIT.
 
 ## Limites
 
-O índice descreve municípios, não pessoas. Os limiares e pesos ainda serão calibrados com
-internações e óbitos do DataSUS (que chegam com meses de atraso) e pactuados com os gestores.
+O índice descreve municípios, não pessoas. A resolução de 0,5° não distingue bairros nem ilhas de
+calor urbanas. Na Amazônia a CPC se apoia em poucas estações. Os limiares ainda serão calibrados com
+internações e óbitos do DataSUS, que chegam com meses de atraso, e pactuados com os gestores.

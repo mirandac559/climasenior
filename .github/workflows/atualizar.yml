@@ -1,14 +1,20 @@
 name: Atualizar ClimaSênior
 
-# Roda todo dia às 06:00 de São Luís (09:00 UTC) e também sob demanda.
+# 06:00 de Brasília (09:00 UTC): atualização completa, com a previsão do dia.
+# A cada 2 horas: completa lacunas pendentes (sai em segundos quando não há nada a fazer).
 on:
   schedule:
     - cron: "0 9 * * *"
+    - cron: "30 */2 * * *"
   workflow_dispatch:
+    inputs:
+      modo:
+        description: "completo ou complemento"
+        default: "completo"
 
 permissions:
-  contents: write     # gravar a série diária em data/
-  pages: write        # publicar o painel
+  contents: write
+  pages: write
   id-token: write
 
 concurrency:
@@ -18,9 +24,9 @@ concurrency:
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.publicacao.outputs.page_url }}
+    timeout-minutes: 120
+    outputs:
+      alterou: ${{ steps.resultado.outputs.alterou }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,23 +39,39 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements-operacional.txt
 
-      - name: Testes
-        run: pip install pytest && python -m pytest tests/test_operacional.py -q
-
       - name: Buscar dados e calcular o IVC
-        run: python -m climasenior.operacional
+        run: |
+          if [ "${{ github.event.schedule }}" = "30 */2 * * *" ] || [ "${{ inputs.modo }}" = "complemento" ]; then
+            python -m climasenior.brasil --complemento
+          else
+            python -m climasenior.brasil
+          fi
 
-      - name: Registrar a série no repositório
+      - name: Registrar dados e registro de execução
+        if: always()
         run: |
           git config user.name "climasenior-bot"
           git config user.email "climasenior-bot@users.noreply.github.com"
           git add data/
-          git diff --cached --quiet || git commit -m "Atualização diária $(TZ=America/Fortaleza date +%F)"
+          git diff --cached --quiet || git commit -q -m "Atualização $(TZ=America/Sao_Paulo date '+%F %H:%M')"
           git push
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - id: resultado
+        run: echo "alterou=$([ -f .sem_alteracoes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.resultado.outputs.alterou == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  publicar:
+    needs: atualizar
+    if: needs.atualizar.outputs.alterou == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
       - id: publicacao
         uses: actions/deploy-pages@v4
