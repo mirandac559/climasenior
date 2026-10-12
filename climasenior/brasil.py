@@ -171,13 +171,18 @@ def climatologia(cliente, m: pd.DataFrame, P: Pastas, log) -> tuple[pd.DataFrame
     ii, jj = np.array([u[0] for u in unicas]), np.array([u[1] for u in unicas])
     log(f"    {len(cel_ids)} células com sede municipal")
 
-    datas, tx, tn = [], [], []
+    datas, tx, tn, falhas = [], [], [], []
     for ano in ANOS_CLIMATOLOGIA:
-        if ano == ultimo:
-            d1, a1 = d_ref, tx_ref
-        else:
-            d1, _, _, a1 = CPC.baixar_e_ler(cliente, ano, "tmax", log)
-        d2, _, _, a2 = CPC.baixar_e_ler(cliente, ano, "tmin", log)
+        try:
+            if ano == ultimo:
+                d1, a1 = d_ref, tx_ref
+            else:
+                d1, _, _, a1 = CPC.baixar_e_ler(cliente, ano, "tmax", log)
+            d2, _, _, a2 = CPC.baixar_e_ler(cliente, ano, "tmin", log)
+        except F.ErroFonte as e:
+            log(f"    aviso: CPC {ano} indisponível ({e}); seguindo sem este ano")
+            falhas.append(ano)
+            continue
         if d1 != d2:
             raise F.ErroFonte(f"CPC {ano}: datas de tmax e tmin não coincidem")
         datas += d1
@@ -186,6 +191,8 @@ def climatologia(cliente, m: pd.DataFrame, P: Pastas, log) -> tuple[pd.DataFrame
         if ano == ultimo:                            # dezembro do último ano: aquecimento da aclimatação
             dez = [k for k, d in enumerate(d1) if d.month == 12]
             _gravar_cpc(P, [d1[k] for k in dez], cel_ids, a1[dez][:, ii, jj], a2[dez][:, ii, jj])
+    if len(ANOS_CLIMATOLOGIA) - len(falhas) < min(8, len(ANOS_CLIMATOLOGIA)):
+        raise F.ErroFonte(f"CPC: só {len(ANOS_CLIMATOLOGIA) - len(falhas)} anos de climatologia; tente de novo mais tarde")
     tx, tn = np.concatenate(tx), np.concatenate(tn)
     tmed = pd.DataFrame((tx + tn) / 2, index=pd.to_datetime(datas), columns=cel_ids)
     tmed = tmed.interpolate(limit=3, limit_area="inside")
@@ -629,6 +636,10 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
                     f"{C.LIMIAR_ACAO}; IVC máximo {np.nanmax(v):.0f}")
         log(f"  chamadas restantes: {orc[0]}")
         return {"alterou": True, "dias": dias, "avisos": avisos, **{k: info[k] for k in ("pendentes", "sem_vies")}}
+    except Exception:
+        import traceback
+        log("ERRO:\n" + traceback.format_exc())
+        raise
     finally:
         _gravar_json(P.ref / "uso_api.json", {"data": hoje.isoformat(), "chamadas": usado + (orc_inicial - orc[0])},
                      compacto=False)

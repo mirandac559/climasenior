@@ -72,12 +72,24 @@ class ClienteHTTP:
         return r.text
 
     def baixar(self, url: str, destino) -> None:
-        """Baixa um arquivo grande em partes, sem carregá-lo na memória."""
-        with self._s.get(url, stream=True, timeout=600) as r:
-            r.raise_for_status()
-            with open(destino, "wb") as f:
-                for parte in r.iter_content(1 << 20):
-                    f.write(parte)
+        """Baixa um arquivo grande em partes, sem carregá-lo na memória, com novas tentativas."""
+        ultimo = None
+        for n in range(self.tentativas + 1):
+            try:
+                with self._s.get(url, stream=True, timeout=(30, 300)) as r:
+                    if r.status_code == 404:
+                        raise ErroFonte(f"HTTP 404 em {url}")
+                    r.raise_for_status()
+                    with open(destino, "wb") as f:
+                        for parte in r.iter_content(1 << 20):
+                            f.write(parte)
+                return
+            except ErroFonte:
+                raise
+            except Exception as e:  # noqa: BLE001 - conexão interrompida, tempo esgotado, 5xx
+                ultimo = e
+                time.sleep(5 * (2 ** n))
+        raise ErroFonte(f"Falha ao baixar {url}: {ultimo}")
 
     def ultima_modificacao(self, url: str) -> str | None:
         r = self._s.head(url, timeout=self.timeout, allow_redirects=True)
