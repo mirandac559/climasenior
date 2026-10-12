@@ -2,14 +2,18 @@ name: Atualizar ClimaSênior
 
 # 06:00 de Brasília (09:00 UTC): atualização completa, com a previsão do dia.
 # A cada 2 horas: completa lacunas pendentes (sai em segundos quando não há nada a fazer).
+# Mudança no painel ou no cálculo: republica com os dados já gravados, sem consultar as fontes.
 on:
   schedule:
     - cron: "0 9 * * *"
     - cron: "30 */2 * * *"
+  push:
+    branches: [main]
+    paths: ["site/index.html", "climasenior/brasil.py"]
   workflow_dispatch:
     inputs:
       modo:
-        description: "completo ou complemento"
+        description: "completo, complemento ou painel"
         default: "completo"
 
 permissions:
@@ -41,7 +45,9 @@ jobs:
 
       - name: Buscar dados e calcular o IVC
         run: |
-          if [ "${{ github.event.schedule }}" = "30 */2 * * *" ] || [ "${{ inputs.modo }}" = "complemento" ]; then
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.modo }}" = "painel" ]; then
+            python -m climasenior.brasil --painel
+          elif [ "${{ github.event.schedule }}" = "30 */2 * * *" ] || [ "${{ inputs.modo }}" = "complemento" ]; then
             python -m climasenior.brasil --complemento
           else
             python -m climasenior.brasil

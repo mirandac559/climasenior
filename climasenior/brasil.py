@@ -55,7 +55,6 @@ ORCAMENTO = int(os.environ.get("CLIMASENIOR_ORCAMENTO", "4500"))   # chamadas Op
 LIMITE_DIARIO = int(os.environ.get("CLIMASENIOR_LIMITE_DIARIO", "9500"))  # abaixo das 10.000 diárias gratuitas
 DIAS_PASSADOS = 7
 DIAS_FUTUROS = 7
-PILOTO = "RM Grande São Luís (piloto)"
 PRIORIDADE_FONTE = {"cpc": 0, "modelo": 1}
 
 
@@ -532,14 +531,12 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
     nomes = m["nome"].tolist()
     if modo != "real":   # na simulação, nenhum valor simulado leva o nome de um município real
         nomes = [f"Município fictício {k + 1}" for k in range(len(m))]
-    piloto = [c for c, n, u in zip(m["cod_ibge"], m["nome"], m["uf"]) if u == "MA" and n in
-              {x["nome"] for x in C.MUNICIPIOS_OPERACIONAIS}]
     _gravar_json(site / "municipios.json", {
         "cod": m["cod_ibge"].tolist(), "nome": nomes, "uf": m["uf"].tolist(),
         "lat": _lista(m["lat"], 3), "lon": _lista(m["lon"], 3), "pop": _lista(m["populacao"], 0),
         "pop60": _lista(m["pop60"], 0), "p60": _lista(m["prop60"], 4), "p80": _lista(m["prop80"], 4),
         "S": _lista(r["S"], 3), "C": _lista(r["C"], 3) if r["C"] is not None else None,
-        "cel": [int(i) for i in r["idx_cel"]], "celulas": r["cols"], "regioes": {PILOTO: piloto}})
+        "cel": [int(i) for i in r["idx_cel"]], "celulas": r["cols"]})
 
     dias = r["dias"]
     inicio = pd.Timestamp(date(C.ANO_INICIO_OPERACIONAL, 1, 1))
@@ -608,7 +605,12 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
 # Orquestração
 # =============================================================================
 def executar(cliente=None, hoje: date | None = None, modo="real", complemento=False, orcamento=None,
-             base: Path | None = None, site: Path | None = None, pausa=10.5, verbose=True) -> dict:
+             base: Path | None = None, site: Path | None = None, pausa=10.5, verbose=True,
+             so_painel=False) -> dict:
+    """
+    so_painel: recalcula e reexporta o painel com os dados já gravados, sem consultar nenhuma
+    fonte (útil quando muda só o painel ou o cálculo).
+    """
     P = Pastas(base or C.DIR_DADOS, site or C.DIR_SITE_DADOS)
     linhas_log = []
 
@@ -625,7 +627,8 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
     orc = [max(0, min(orcamento if orcamento is not None else ORCAMENTO, LIMITE_DIARIO - usado))]
     orc_inicial = orc[0]
     avisos = []
-    log(f"[ClimaSênior {__version__} · Brasil] referência {hoje} | modo {modo} | orçamento {orc[0]} chamadas")
+    log(f"[ClimaSênior {__version__} · Brasil] referência {hoje} | modo {modo} | "
+        + ("só painel, sem consultas" if so_painel else f"orçamento {orc[0]} chamadas"))
     try:
         if complemento:   # execuções extras: só completam lacunas e desvio; a previsão é da execução diária
             p = _ler_json(P.ref / "pendencias.json")
@@ -636,26 +639,32 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
         m = territorio(cliente, P, log)
         log("[2/5] Climatologia e células")
         cel, m = climatologia(cliente, m, P, log)
-        log("[3/5] Observação CPC do ano corrente")
-        cpc_fim = cpc_ano_corrente(cliente, cel, P, hoje, log)
-        log("[4/5] Modelo: previsão, lacunas e desvio")
-        if not complemento:
-            n = previsao(cliente, cel, m, P, hoje, orc, log, pausa)
-            if n < len(cel):
-                avisos.append(f"Previsão de hoje obtida para {n} de {len(cel)} células; as demais usam a previsão anterior")
-        info = lacunas_e_vies(cliente, cel, m, P, hoje, cpc_fim, orc, log, pausa)
-        pend = _ler_json(P.ref / "pendencias.json")
-        pend["previsao_em"] = hoje.isoformat()
-        _gravar_json(P.ref / "pendencias.json", pend, compacto=False)
+        if so_painel:
+            log("[3-4/5] Dados já gravados (sem consultas)")
+            ult = (_ler_json(P.ref / "fontes.json") or {}).get("cpc_ultimo_dia")
+            cpc_fim = date.fromisoformat(ult) if ult else None
+            pend = _ler_json(P.ref / "pendencias.json") or {}
+            vies = pd.read_csv(P.ref / "vies.csv", dtype={"celula": str}) if (P.ref / "vies.csv").exists() else \
+                pd.DataFrame(columns=["celula", "vies_tmax", "vies_tmin", "n_dias"])
+            info = {"pendentes": pend.get("celula_dias_faltando", 0), "sem_vies": pend.get("celulas_sem_vies", 0),
+                    "vies": vies}
+        else:
+            log("[3/5] Observação CPC do ano corrente")
+            cpc_fim = cpc_ano_corrente(cliente, cel, P, hoje, log)
+            log("[4/5] Modelo: previsão, lacunas e desvio")
+            if not complemento:
+                n = previsao(cliente, cel, m, P, hoje, orc, log, pausa)
+                if n < len(cel):
+                    avisos.append(f"Previsão de hoje obtida para {n} de {len(cel)} células; as demais usam a previsão anterior")
+            info = lacunas_e_vies(cliente, cel, m, P, hoje, cpc_fim, orc, log, pausa)
+            pend = _ler_json(P.ref / "pendencias.json")
+            pend["previsao_em"] = hoje.isoformat()
+            _gravar_json(P.ref / "pendencias.json", pend, compacto=False)
         if info["pendentes"]:
             avisos.append(f"Série ainda incompleta: {info['pendentes']} combinações de célula e dia serão "
                           "completadas nas próximas execuções")
         if info["sem_vies"]:
             avisos.append(f"{info['sem_vies']} células ainda sem correção do desvio do modelo")
-        if capacidade(m, P) is None:
-            avisos.append("Capacidade de resposta ainda não carregada (CNES): o IVC usa exposição e sensibilidade")
-        if m["censo_ausente"].any():
-            avisos.append(f"{int(m['censo_ausente'].sum())} municípios instalados após o Censo 2022 usam a mediana da UF")
         log("[5/5] EHF, IVC e painel")
         r = calcular(cel, m, info["vies"], P, hoje)
         dias = exportar(r, cel, m, P, hoje, modo, avisos,
@@ -683,6 +692,7 @@ def main():
     ap = argparse.ArgumentParser(description="Atualiza o ClimaSênior para todo o Brasil")
     ap.add_argument("--simular", action="store_true")
     ap.add_argument("--complemento", action="store_true", help="só completa lacunas pendentes")
+    ap.add_argument("--painel", action="store_true", help="só recalcula e reexporta o painel, sem consultar as fontes")
     ap.add_argument("--data")
     ap.add_argument("--orcamento", type=int)
     ap.add_argument("--saida", help="pasta para dados e painel (padrão: data/ e site/data/)")
@@ -698,7 +708,7 @@ def main():
         from .simulacao_br import ClienteSimuladoBrasil
         cliente = ClienteSimuladoBrasil(hoje)
     r = executar(cliente, hoje, "simulacao" if a.simular else "real", a.complemento, a.orcamento, base, site,
-                 pausa=0 if a.simular else 10.5)
+                 pausa=0 if a.simular else 10.5, so_painel=a.painel)
     if not r.get("alterou"):
         Path(".sem_alteracoes").write_text("1")
     sys.exit(0)

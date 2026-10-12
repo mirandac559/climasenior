@@ -1,7 +1,7 @@
 # ClimaSênior
 
 Índice de Vulnerabilidade Climática (IVC) para a saúde da população idosa nos **5.571 municípios
-do Brasil**, atualizado todos os dias desde 1º de janeiro de 2026. O painel mostra a situação do dia,
+do Brasil**, atualizado todos os dias desde 1º de janeiro de 2026. O painel mostra a situação do dia no país, em cada estado ou em um município,
 a previsão para os próximos dias, a série de cada município e a conduta do protocolo de resposta graduada.
 
 > O presente trabalho foi realizado com apoio do Itaú Viver Mais e Portal do Envelhecimento.
@@ -34,7 +34,8 @@ célula (cerca de 2.000) e respeita um teto de 9.500 por dia; o que não couber 
 | Sensibilidade | 25% | proporção de pessoas com 60+ (70%) e 80+ (30%), relativa ao percentil 99 do país |
 | Capacidade de resposta | 15% | estabelecimentos de atenção básica por habitante (CNES), opcional em `data/ref/capacidade.csv` |
 
-Sem o arquivo de capacidade, o peso é redistribuído entre exposição e sensibilidade e o painel avisa.
+Sem o arquivo de capacidade, o peso é redistribuído entre exposição e sensibilidade; a aba Validação
+mostra os pesos em uso.
 Faixas: BAIXA (0–39), MODERADA (40–59), ALTA (60–79), MUITO ALTA (80–100). Limiar de ação: 60.
 
 ## Rodar
@@ -43,6 +44,7 @@ Faixas: BAIXA (0–39), MODERADA (40–59), ALTA (60–79), MUITO ALTA (80–100
 pip install -r requirements-operacional.txt
 python -m climasenior.brasil                    # dados reais (a primeira execução baixa a climatologia)
 python -m climasenior.brasil --complemento      # só completa lacunas
+python -m climasenior.brasil --painel           # só recalcula e reexporta o painel, sem consultar as fontes
 python -m http.server 8000 -d site              # painel em http://localhost:8000
 ```
 
@@ -53,7 +55,8 @@ Testes: `pip install pytest scikit-learn joblib && python -m pytest tests -q`
 
 ## Publicação
 
-O fluxo `.github/workflows/atualizar.yml` roda às 06:00 de Brasília e a cada 2 horas para lacunas,
+O fluxo `.github/workflows/atualizar.yml` roda às 06:00 de Brasília, a cada 2 horas para lacunas e a
+cada mudança em `site/index.html` ou `climasenior/brasil.py` (só o painel, sem consultas),
 grava a série em `data/clima/AAAA/AAAA-MM-DD.csv` (uma linha por célula) e publica o painel no
 GitHub Pages. O registro da última execução fica em `data/log/ultima_execucao.log`.
 Alternativa para servidor próprio: `Dockerfile`.

@@ -63,6 +63,10 @@ th{color:var(--muted);font-weight:600;font-size:12px;position:sticky;top:0;backg
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr{cursor:pointer}
 tbody tr:hover td{background:rgba(27,149,213,.07)}
+tbody tr.sel td{background:rgba(27,149,213,.16);font-weight:600}
+.escopo{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;font-size:13px;color:var(--muted);margin:14px 0 -4px}
+.escopo b{color:var(--ink)}
+.link{border:none;background:none;padding:0;font:inherit;color:var(--azul-esc);text-decoration:underline;cursor:pointer}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 .pill.f-MODERADA{color:#2b2100}
 .tbl-wrap{overflow:auto;max-height:470px}
@@ -98,14 +102,15 @@ footer a{color:var(--azul-esc)}
     <div><label for="dia">Data de referência</label><input type="range" id="dia" min="0" max="0" value="0"> <span class="val" id="diaTxt"></span></div>
     <div><label for="lim">Limiar de ação (IVC)</label><input type="range" id="lim" min="0" max="100" step="5" value="60"> <span class="val" id="limTxt">60</span></div>
     <div><label for="area">Área</label><select id="area"></select></div>
-    <div><label for="busca">Município (série temporal)</label><input type="search" id="busca" list="listaMun" placeholder="Digite o nome" autocomplete="off"><datalist id="listaMun"></datalist></div>
+    <div><label for="busca">Município</label><input type="search" id="busca" list="listaMun" placeholder="Todos · digite o nome" autocomplete="off"><datalist id="listaMun"></datalist></div>
   </div>
 
+  <div class="escopo" id="escopo" aria-live="polite"></div>
   <div class="kpis">
-    <div class="kpi"><div class="l">Municípios em alerta</div><div class="v" id="k1">–</div><div class="s" id="k1s"></div></div>
-    <div class="kpi"><div class="l">IVC máximo</div><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
-    <div class="kpi"><div class="l">Tmáx média</div><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
-    <div class="kpi"><div class="l">Pessoas com 60+ em alerta</div><div class="v" id="k4">–</div><div class="s">Censo 2022, municípios com IVC acima do limiar</div></div>
+    <div class="kpi"><div class="l" id="k1l">Municípios em alerta</div><div class="v" id="k1">–</div><div class="s" id="k1s"></div></div>
+    <div class="kpi"><div class="l" id="k2l">IVC máximo</div><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
+    <div class="kpi"><div class="l" id="k3l">Tmáx média</div><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
+    <div class="kpi"><div class="l">Pessoas com 60+ em alerta</div><div class="v" id="k4">–</div><div class="s" id="k4s"></div></div>
   </div>
 
   <div class="tabs" role="tablist">
@@ -131,6 +136,8 @@ footer a{color:var(--azul-esc)}
   </div>
 
   <div id="p2" class="panel">
+    <div class="vazio" id="serieVazio">Escolha um município no campo <b>Município</b>, no mapa ou na tabela para ver a série temporal.</div>
+    <div id="serieConteudo" hidden>
     <div class="card">
       <h3 id="serieTit">Série temporal</h3>
       <div class="sub">IVC diário (linha azul) com as faixas ao fundo e o limiar de ação (tracejado vermelho). Trecho tracejado: previsão.</div>
@@ -140,6 +147,7 @@ footer a{color:var(--azul-esc)}
       <h3>Temperatura máxima e média de três dias</h3>
       <div class="sub" id="tempSub">Temperatura máxima (pontos laranja) e média dos três dias seguintes (linha). A linha cinza é o percentil 95 local: acima dela começa a onda de calor medida pelo EHF.</div>
       <div class="chart-wrap baixo"><canvas id="cTemp" aria-label="Temperaturas do município"></canvas></div>
+    </div>
     </div>
   </div>
 
@@ -217,7 +225,6 @@ async function diaDados(k){
 function municipiosDaArea(){
   const n = MUN.cod.length, out = [];
   if(area === "BR"){ for(let i=0;i<n;i++) out.push(i); return out; }
-  if(MUN.regioes && MUN.regioes[area]){ const s = new Set(MUN.regioes[area]); for(let i=0;i<n;i++) if(s.has(MUN.cod[i])) out.push(i); return out; }
   for(let i=0;i<n;i++) if(MUN.uf[i] === area) out.push(i);
   return out;
 }
@@ -226,7 +233,6 @@ function rotuloArea(){ return area === "BR" ? "Brasil" : (UF_NOME[area] || area)
 function preencherControles(){
   const ufs = [...new Set(MUN.uf)].sort((a,b) => (UF_NOME[a]||a).localeCompare(UF_NOME[b]||b, "pt"));
   let h = `<option value="BR">Brasil (${fmt(MUN.cod.length)} municípios)</option>`;
-  for(const r of Object.keys(MUN.regioes || {})) if(MUN.regioes[r].length) h += `<option value="${r}">${r}</option>`;
   h += ufs.map(u => `<option value="${u}">${UF_NOME[u] || u}</option>`).join("");
   $("area").innerHTML = h;
   $("dia").max = META.dias.length - 1;
@@ -248,13 +254,36 @@ async function atualizar(){
   const al = com.filter(x => x.ivc >= lim);
   const mx = com.reduce((a,b) => (b.ivc > (a?.ivc ?? -1) ? b : a), null);
   const tm = vals.filter(x => x.tmax != null);
-  $("k1").textContent = fmt(al.length);
-  $("k1s").textContent = `de ${fmt(com.length)} · ${rotuloArea()} · limiar ${lim}`;
-  $("k2").textContent = mx ? fmt(mx.ivc) : "–";
-  $("k2s").textContent = mx ? `${MUN.nome[mx.i]} (${MUN.uf[mx.i]})` : "";
-  $("k3").textContent = tm.length ? fmt(tm.reduce((s,x) => s + x.tmax, 0) / tm.length, 1) : "–";
-  $("k3s").textContent = `°C, ${fmt(tm.length)} municípios`;
-  $("k4").textContent = fmt(al.reduce((s,x) => s + (MUN.pop60[x.i] || 0), 0));
+  const m = sel != null ? vals.find(x => x.i === sel) : null;
+  if(m){
+    const nome = `${MUN.nome[sel]} (${MUN.uf[sel]})`, f = faixa(m.ivc), alerta = m.ivc != null && m.ivc >= lim;
+    $("escopo").innerHTML = `<span>Indicadores de <b>${nome}</b> em ${dataBR(d)}</span><button class="link" id="limpar" type="button">Ver ${area === "BR" ? "todo o Brasil" : rotuloArea()}</button>`;
+    $("limpar").onclick = () => limparMunicipio();
+    $("k1l").textContent = "Posição no ranking";
+    $("k1").textContent = m.ivc != null ? `${fmt(1 + com.filter(x => x.ivc > m.ivc).length)}º` : "–";
+    $("k1s").textContent = `de ${fmt(com.length)} municípios · ${rotuloArea()}, do maior para o menor IVC`;
+    $("k2l").textContent = "IVC do município";
+    $("k2").textContent = fmt(m.ivc);
+    $("k2s").textContent = f ? `${f.r} · ${alerta ? "acima" : "abaixo"} do limiar ${lim}` : "sem dado na data";
+    $("k3l").textContent = "Tmáx";
+    $("k3").textContent = fmt(m.tmax, 1);
+    $("k3s").textContent = `°C · ${m.dc ? `${m.dc} dia(s) seguido(s) de onda de calor` : "sem onda de calor"}`;
+    $("k4").textContent = fmt(alerta ? (MUN.pop60[sel] || 0) : 0);
+    $("k4s").textContent = `de ${fmt(MUN.pop60[sel])} pessoas com 60+ (Censo 2022) · ${alerta ? "em alerta" : "fora de alerta"}`;
+  } else {
+    $("escopo").innerHTML = `<span>Indicadores de <b>${rotuloArea()}</b> em ${dataBR(d)}, ${fmt(com.length)} municípios. Escolha um município para ver os dele.</span>`;
+    $("k1l").textContent = "Municípios em alerta";
+    $("k1").textContent = fmt(al.length);
+    $("k1s").textContent = `de ${fmt(com.length)} · ${rotuloArea()} · limiar ${lim}`;
+    $("k2l").textContent = "IVC máximo";
+    $("k2").textContent = mx ? fmt(mx.ivc) : "–";
+    $("k2s").textContent = mx ? `${MUN.nome[mx.i]} (${MUN.uf[mx.i]})` : "";
+    $("k3l").textContent = "Tmáx média";
+    $("k3").textContent = tm.length ? fmt(tm.reduce((s,x) => s + x.tmax, 0) / tm.length, 1) : "–";
+    $("k3s").textContent = `°C, ${fmt(tm.length)} municípios`;
+    $("k4").textContent = fmt(al.reduce((s,x) => s + (MUN.pop60[x.i] || 0), 0));
+    $("k4s").textContent = `Censo 2022, soma dos municípios com IVC ≥ ${lim}`;
+  }
   tabela(vals, d);
   desenharMapa(D);
   protocolo(vals, d);
@@ -265,7 +294,7 @@ function tabela(vals, d){
   const ord = vals.filter(x => x.ivc != null).sort((a,b) => b.ivc - a.ivc || (MUN.pop60[b.i]||0) - (MUN.pop60[a.i]||0));
   const top = ord.slice(0, 150);
   $("tabData").textContent = `${dataBR(d)} · ${rotuloArea()} · ${ord.length > top.length ? `150 maiores de ${fmt(ord.length)}` : `${fmt(ord.length)} municípios`}, ordenados pelo IVC. Dias: dias seguidos com onda de calor.`;
-  $("tab").querySelector("tbody").innerHTML = top.map(x => `<tr data-i="${x.i}"><td>${MUN.nome[x.i]}</td><td>${MUN.uf[x.i]}</td><td class="n"><b>${fmt(x.ivc)}</b></td><td>${pill(x.ivc)}</td><td class="n">${fmt(x.tmax,1)}</td><td class="n">${fmt(x.dc)}</td></tr>`).join("");
+  $("tab").querySelector("tbody").innerHTML = top.map(x => `<tr data-i="${x.i}"${x.i === sel ? ' class="sel"' : ""}><td>${MUN.nome[x.i]}</td><td>${MUN.uf[x.i]}</td><td class="n"><b>${fmt(x.ivc)}</b></td><td>${pill(x.ivc)}</td><td class="n">${fmt(x.tmax,1)}</td><td class="n">${fmt(x.dc)}</td></tr>`).join("");
 }
 
 // ------------------------------------------------------------------ mapa
@@ -317,6 +346,14 @@ function maisProximo(ev){
 // ------------------------------------------------------------------ protocolo e validação
 function protocolo(vals, d){
   $("bandas").innerHTML = FAIXAS.map(f => `<div class="band" style="border-color:var(${f.v})"><b>${f.r}</b> (${f.de}–${f.ate}) — ${f.c}</div>`).join("");
+  const m = sel != null ? vals.find(x => x.i === sel) : null;
+  if(m){
+    const f = faixa(m.ivc);
+    $("recData").textContent = `${dataBR(d)} · ${MUN.nome[sel]} (${MUN.uf[sel]})`;
+    $("recs").innerHTML = f ? `<div class="rec"><b style="color:var(${f.v})">IVC ${fmt(m.ivc)}, ${f.r}</b> ${m.ivc >= lim ? `(acima do limiar ${lim})` : `(abaixo do limiar ${lim})`}: ${f.c}</div>
+      <div class="rec">${fmt(MUN.pop60[sel])} pessoas com 60 anos ou mais, das quais ${fmt(Math.round((MUN.pop[sel]||0) * (MUN.p80[sel]||0)))} com 80 ou mais (Censo 2022).</div>` : `<div class="rec">Sem dado nesta data.</div>`;
+    return;
+  }
   const al = vals.filter(x => x.ivc != null && x.ivc >= lim).sort((a,b) => b.ivc - a.ivc);
   $("recData").textContent = `${dataBR(d)} · ${rotuloArea()} · ${al.length ? `${fmt(al.length)} municípios com IVC ≥ ${lim}${al.length > 100 ? " (100 primeiros)" : ""}` : "nenhum município acima do limiar"}`;
   $("recs").innerHTML = al.slice(0,100).map(x => { const f = faixa(x.ivc); return `<div class="rec"><b style="color:var(${f.v})">${MUN.nome[x.i]} (${MUN.uf[x.i]})</b> IVC ${fmt(x.ivc)}, ${f.r}: ${f.c}</div>`; }).join("");
@@ -345,6 +382,7 @@ function validacao(vals, d){
 
 // ------------------------------------------------------------------ série temporal
 async function serie(){
+  $("serieVazio").hidden = sel != null; $("serieConteudo").hidden = sel == null;
   if(sel == null) return;
   const uf = MUN.uf[sel], ano = META.dias[dia][0].slice(0,4), chave = `${ano}/${uf}`;
   $("serieTit").textContent = `Série temporal — ${MUN.nome[sel]} (${uf})`;
@@ -385,9 +423,15 @@ async function serie(){
 
 function selecionar(i, abrir){
   sel = i; $("busca").value = `${MUN.nome[i]} (${MUN.uf[i]})`;
-  if(DIAS[META.dias[dia][0]]) desenharMapa(DIAS[META.dias[dia][0]]);
+  if(area !== "BR" && MUN.uf[i] !== area){ area = "BR"; $("area").value = "BR"; idxArea = municipiosDaArea(); listaMunicipios(); }
+  atualizar();
   if(abrir) document.querySelector('.tab[data-p="p2"]').click();
   else if($("p2").classList.contains("on")) serie().catch(console.error);
+}
+function limparMunicipio(){
+  sel = null; $("busca").value = "";
+  atualizar();
+  if($("p2").classList.contains("on")) serie().catch(console.error);
 }
 
 // ------------------------------------------------------------------ início
@@ -409,9 +453,7 @@ async function iniciar(){
   $("rodVersao").textContent = `Versão ${META.versao} · atualizado em ${g.toLocaleString("pt-BR", {dateStyle:"short", timeStyle:"short", timeZone:"America/Sao_Paulo"})} (horário de Brasília) · código aberto`;
   preencherControles();
   idxArea = municipiosDaArea(); listaMunicipios();
-  const sl = MUN.cod.findIndex((c,i) => MUN.nome[i] === "São Luís" && MUN.uf[i] === "MA");
-  sel = sl >= 0 ? sl : idxArea[0];
-  $("busca").value = `${MUN.nome[sel]} (${MUN.uf[sel]})`;
+  sel = null; $("busca").value = "";
   await atualizar();
 
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
@@ -424,8 +466,17 @@ async function iniciar(){
   let pendente = null;
   $("dia").oninput = e => { dia = +e.target.value; clearTimeout(pendente); pendente = setTimeout(() => { atualizar(); if($("p2").classList.contains("on")) serie(); }, 120); };
   $("lim").oninput = e => { lim = +e.target.value; $("limTxt").textContent = lim; atualizar(); if($("p2").classList.contains("on")) serie(); };
-  $("area").onchange = e => { area = e.target.value; idxArea = municipiosDaArea(); listaMunicipios(); atualizar(); };
-  $("busca").onchange = e => { const v = e.target.value; const i = MUN.nome.findIndex((n,k) => `${n} (${MUN.uf[k]})` === v); if(i >= 0) selecionar(i, true); };
+  $("area").onchange = e => {
+    area = e.target.value; idxArea = municipiosDaArea(); listaMunicipios();
+    if(sel != null && area !== "BR" && MUN.uf[sel] !== area){ sel = null; $("busca").value = ""; }
+    atualizar(); if($("p2").classList.contains("on")) serie().catch(console.error);
+  };
+  const acharMunicipio = v => { v = v.trim(); if(!v) return -1;
+    let i = MUN.nome.findIndex((n,k) => `${n} (${MUN.uf[k]})` === v);
+    if(i < 0){ const so = idxArea.filter(k => MUN.nome[k].localeCompare(v, "pt", {sensitivity:"base"}) === 0); if(so.length === 1) i = so[0]; }
+    return i; };
+  $("busca").onchange = e => { const i = acharMunicipio(e.target.value); if(i >= 0){ if(i !== sel) selecionar(i, false); } else if(!e.target.value.trim()) limparMunicipio(); };
+  $("busca").addEventListener("input", e => { if(!e.target.value) limparMunicipio(); else { const v = e.target.value; const i = MUN.nome.findIndex((n,k) => `${n} (${MUN.uf[k]})` === v); if(i >= 0 && i !== sel) selecionar(i, false); } });
   $("tab").addEventListener("click", e => { const tr = e.target.closest("tr[data-i]"); if(tr) selecionar(+tr.dataset.i, true); });
   const tip = $("tip");
   $("mapa").addEventListener("mousemove", ev => {

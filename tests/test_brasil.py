@@ -37,7 +37,6 @@ def test_ponta_a_ponta(pastas):
     mu = json.loads((site / "municipios.json").read_text(encoding="utf-8"))
     assert len(mu["cod"]) == 71 and min(mu["cel"]) >= 0              # inclui o município geocodificado
     assert all(n.startswith("Município fictício") for n in mu["nome"])
-    assert len(mu["regioes"]["RM Grande São Luís (piloto)"]) == 13
     d = json.loads((site / "dia" / "2026-10-12.json").read_text(encoding="utf-8"))
     assert len(d["ivc"]) == 71 and all(0 <= v <= 100 for v in d["ivc"] if v is not None)
     assert len(d["tmax"]) == len(mu["celulas"])
@@ -45,6 +44,26 @@ def test_ponta_a_ponta(pastas):
         assert (site / "serie" / "2026" / f"{uf}.json").exists()
     uso = json.loads((base / "ref" / "uso_api.json").read_text(encoding="utf-8"))
     assert uso["chamadas"] > 0 and r["pendentes"] == 0
+    assert "regioes" not in mu
+    assert not any("Capacidade" in a or "Censo" in a for a in meta["avisos"])
+
+
+def test_so_painel_nao_consulta_fontes(pastas):
+    base, site = pastas
+    _rodar(pastas, date(2026, 10, 12))
+    antes = json.loads((base / "ref" / "uso_api.json").read_text(encoding="utf-8"))["chamadas"]
+    ivc = json.loads((site / "dia" / "2026-10-12.json").read_text(encoding="utf-8"))["ivc"]
+    (site / "dia" / "2026-10-12.json").unlink()
+
+    class SemRede:
+        def __getattr__(self, nome):
+            raise AssertionError(f"consultou a rede: {nome}")
+    r = B.executar(SemRede(), date(2026, 10, 12), "simulacao", base=base, site=site, pausa=0, verbose=False,
+                   so_painel=True)
+    assert r["alterou"] and json.loads((site / "dia" / "2026-10-12.json").read_text(encoding="utf-8"))["ivc"] == ivc
+    meta = json.loads((site / "meta.json").read_text(encoding="utf-8"))
+    assert meta["ultimo_dia_cpc"] == "2026-09-04"
+    assert json.loads((base / "ref" / "uso_api.json").read_text(encoding="utf-8"))["chamadas"] == antes
 
 
 def test_orcamento_curto_completa_depois(pastas):
@@ -81,7 +100,7 @@ def test_cpc_prevalece_sobre_modelo(tmp_path):
 def test_painel_usa_campos_exportados():
     html = (Path(__file__).resolve().parent.parent / "site/index.html").read_text(encoding="utf-8")
     for campo in ("meta.json", "municipios.json", "ufs.json", "dia/${d}.json", "serie/${chave}.json",
-                  "ultimo_dia_cpc", "n_celulas", "vies_modelo", "pendencias", "regioes", "celulas"):
+                  "ultimo_dia_cpc", "n_celulas", "vies_modelo", "pendencias", "celulas"):
         assert campo in html, campo
 
 
