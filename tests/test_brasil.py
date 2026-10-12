@@ -83,3 +83,16 @@ def test_painel_usa_campos_exportados():
     for campo in ("meta.json", "municipios.json", "ufs.json", "dia/${d}.json", "serie/${chave}.json",
                   "ultimo_dia_cpc", "n_celulas", "vies_modelo", "pendencias", "regioes", "celulas"):
         assert campo in html, campo
+
+
+def test_vies_atualiza_com_a_janela_recente(tmp_path):
+    P = B.Pastas(tmp_path / "d", tmp_path / "s")
+    dias = pd.date_range("2026-10-05", periods=5)
+    obs = pd.DataFrame({"data": dias, "celula": "a", "tmax": 30.0, "tmin": 22.0, "tapmax": None, "fonte": "cpc"})
+    B.gravar_dias(P, obs)
+    pd.DataFrame({"celula": ["a"], "vies_tmax": [1.0], "vies_tmin": [0.0], "n_dias": [7]}).to_csv(P.ref / "vies.csv", index=False)
+    mod = obs.assign(tmax=32.0, tmin=21.0, fonte="modelo")
+    B.atualizar_vies(P, mod)
+    v = pd.read_csv(P.ref / "vies.csv").set_index("celula")
+    assert v.loc["a", "vies_tmax"] == pytest.approx(0.7 * 1.0 + 0.3 * 2.0)
+    assert v.loc["a", "vies_tmin"] == pytest.approx(0.3 * -1.0) and v.loc["a", "n_dias"] == 12

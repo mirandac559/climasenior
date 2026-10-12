@@ -20,7 +20,8 @@ a previsão para os próximos dias, a série de cada município e a conduta do p
 
 Cada município usa a célula de 0,5° (cerca de 55 km) que contém a sua sede; municípios vizinhos
 na mesma célula compartilham a exposição, e cada um tem a sua sensibilidade. O desvio médio do
-modelo de previsão em relação à observação é medido célula a célula e descontado.
+modelo de previsão em relação à observação é medido célula a célula, descontado e atualizado
+todos os dias com os dias em que previsão e observação se sobrepõem.
 
 O uso gratuito do Open-Meteo tem limite de 10.000 chamadas por dia. O sistema consulta uma vez por
 célula (cerca de 2.000) e respeita um teto de 9.500 por dia; o que não couber fica para a execução seguinte.

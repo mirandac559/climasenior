@@ -324,6 +324,7 @@ def previsao(cliente, cel, m, P: Pastas, hoje: date, orc: list, log, pausa) -> i
         return 0
     df = df.rename(columns={"chave": "celula"})
     passado = df[df["data"] < pd.Timestamp(hoje)].assign(fonte="modelo")
+    atualizar_vies(P, passado)
     gravar_dias(P, passado)
     fut = df[df["data"] >= pd.Timestamp(hoje)].assign(gerado_em=hoje.isoformat())
     arq = P.prev / "ultima.csv"
@@ -334,6 +335,37 @@ def previsao(cliente, cel, m, P: Pastas, hoje: date, orc: list, log, pausa) -> i
     fut.sort_values(["celula", "data"]).assign(data=lambda x: x["data"].dt.strftime("%Y-%m-%d")).round(
         {"tmax": 1, "tmin": 1, "tapmax": 1}).to_csv(arq, index=False)
     return df["celula"].nunique()
+
+
+def atualizar_vies(P: Pastas, modelo: pd.DataFrame, peso_novo: float = 0.3):
+    """
+    Atualiza o desvio do modelo frente à CPC com os dias em que ambos existem (a janela
+    recente da previsão se sobrepõe à observação de ontem e anteriores). Média móvel
+    exponencial: o desvio acompanha a estação sem oscilar a cada dia.
+    """
+    if modelo.empty:
+        return
+    obs = ler_dias(P, modelo["data"].min().date(), modelo["data"].max().date())
+    obs = obs[obs["fonte"] == "cpc"]
+    j = modelo.merge(obs, on=["data", "celula"], suffixes=("_m", "_o")).dropna(subset=["tmax_m", "tmax_o", "tmin_m", "tmin_o"])
+    if j.empty:
+        return
+    novo = (j.assign(dx=j["tmax_m"] - j["tmax_o"], dn=j["tmin_m"] - j["tmin_o"])
+             .groupby("celula").agg(dx=("dx", "mean"), dn=("dn", "mean"), n=("dx", "size")))
+    novo = novo[novo["n"] >= 3]
+    arq = P.ref / "vies.csv"
+    v = pd.read_csv(arq, dtype={"celula": str}).set_index("celula") if arq.exists() else \
+        pd.DataFrame(columns=["vies_tmax", "vies_tmin", "n_dias"]).rename_axis("celula")
+    for c, r in novo.iterrows():
+        if c in v.index and pd.notna(v.loc[c, "vies_tmax"]):
+            v.loc[c, "vies_tmax"] = (1 - peso_novo) * v.loc[c, "vies_tmax"] + peso_novo * r["dx"]
+            v.loc[c, "vies_tmin"] = (1 - peso_novo) * v.loc[c, "vies_tmin"] + peso_novo * r["dn"]
+            v.loc[c, "n_dias"] = int(v.loc[c, "n_dias"]) + int(r["n"])
+        else:
+            v.loc[c, ["vies_tmax", "vies_tmin", "n_dias"]] = [r["dx"], r["dn"], int(r["n"])]
+    v[["vies_tmax", "vies_tmin"]] = v[["vies_tmax", "vies_tmin"]].astype(float).round(2)
+    v["n_dias"] = v["n_dias"].astype(int)
+    v.reset_index().to_csv(arq, index=False)
 
 
 def faltantes(P: Pastas, cel: pd.DataFrame, d0: date, d1: date):
@@ -631,6 +663,7 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
         k = list(r["dias"]).index(pd.Timestamp(hoje)) if pd.Timestamp(hoje) in r["dias"] else None
         if k is not None:
             v = r["ivc"][k]
+            v = np.round(v)
             if np.isfinite(v).any():
                 log(f"  {len(dias)} dias no painel | hoje: {int(np.nansum(v >= C.LIMIAR_ACAO))} municípios com IVC >= "
                     f"{C.LIMIAR_ACAO}; IVC máximo {np.nanmax(v):.0f}")
