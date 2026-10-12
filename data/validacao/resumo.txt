@@ -1,12 +1,12 @@
-Sensíveis ao calor: 2.217.083 internações; dias em alerta 2.14%; RR 1.17 (1.152-1.188); excesso/ano 593.0
+Sensíveis ao calor: 2.217.083 internações; dias em alerta 2.14%; RR 1.17 (1.152-1.188); excesso/ano 602.0
    faixas: BAIXA 1.0 (None-None); MODERADA 1.069 (1.063-1.075); ALTA 1.224 (1.197-1.254); MUITO ALTA 1.331 (1.239-1.434)
    defasagens: L0 1.134; L1 1.185; L2 1.215; L3 1.204; L4 1.17; L5 1.129; L6 1.098; L7 1.078
-Aparelho circulatório: 7.324.158 internações; dias em alerta 2.14%; RR 0.99 (0.983-0.997); excesso/ano -92.0
+Aparelho circulatório: 7.324.158 internações; dias em alerta 2.14%; RR 0.99 (0.983-0.997); excesso/ano -104.0
    faixas: BAIXA 1.0 (None-None); MODERADA 0.999 (0.996-1.002); ALTA 0.997 (0.986-1.009); MUITO ALTA 0.977 (0.948-1.006)
    defasagens: L0 0.99; L1 0.981; L2 0.979; L3 0.968; L4 0.966; L5 0.974; L6 0.979; L7 0.977
-Aparelho respiratório: 4.872.606 internações; dias em alerta 2.14%; RR 1.086 (1.076-1.095); excesso/ano 565.0
+Aparelho respiratório: 4.872.606 internações; dias em alerta 2.14%; RR 1.086 (1.076-1.095); excesso/ano 562.0
    faixas: BAIXA 1.0 (None-None); MODERADA 1.028 (1.023-1.032); ALTA 1.116 (1.102-1.128); MUITO ALTA 1.179 (1.125-1.237)
    defasagens: L0 1.068; L1 1.096; L2 1.107; L3 1.093; L4 1.07; L5 1.052; L6 1.043; L7 1.021
-Todas as causas clínicas: 27.392.662 internações; dias em alerta 2.14%; RR 1.041 (1.036-1.046); excesso/ano 1660.0
+Todas as causas clínicas: 27.392.662 internações; dias em alerta 2.14%; RR 1.041 (1.036-1.046); excesso/ano 1622.0
    faixas: BAIXA 1.0 (None-None); MODERADA 1.02 (1.018-1.022); ALTA 1.06 (1.053-1.066); MUITO ALTA 1.071 (1.037-1.103)
    defasagens: L0 1.033; L1 1.042; L2 1.047; L3 1.037; L4 1.026; L5 1.02; L6 1.015; L7 1.006
