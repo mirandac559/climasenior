@@ -306,6 +306,26 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
             out["grupos"][g] = r
         return out
 
+    # quanto do alerta vem de onda de calor (EHF > 0, isto é, exposição > 0,5) e quanto só de S e C
+    Em_full = M["Em"]
+    with np.errstate(invalid="ignore"):
+        gatilho = np.isfinite(defasado(0)) & (defasado(0) >= LIMIAR)
+        ehf_pos = Em_full[k0:k1 + 1] > 0.5
+        janela_ehf = np.zeros_like(gatilho)
+        for L in range(JANELA):
+            janela_ehf |= (np.nan_to_num(defasado(L), nan=-1) >= LIMIAR) & (Em_full[k0 - L:k1 + 1 - L] > 0.5)
+    em_al = valido & (X >= LIMIAR)
+    n_gat, n_al = int(gatilho[:, sel].sum()), int(em_al[:, sel].sum())
+    expo_alerta = {
+        "dias_ivc_no_limiar": n_gat,
+        "pct_com_ehf_positivo": B._r((gatilho & ehf_pos)[:, sel].sum() / n_gat * 100, 1) if n_gat else None,
+        "dias_em_alerta": n_al,
+        "pct_alerta_com_ehf_positivo": B._r((em_al & janela_ehf)[:, sel].sum() / n_al * 100, 1) if n_al else None,
+        "nota": "EHF > 0 equivale a exposição E > 0,5; o alerta de um dia considera o IVC do dia e dos 2 anteriores",
+    }
+    log(f"  dias com IVC >= {LIMIAR}: {expo_alerta['pct_com_ehf_positivo']}% com EHF positivo; "
+        f"dias em alerta: {expo_alerta['pct_alerta_com_ehf_positivo']}% com EHF positivo na janela")
+
     res_areas = {a: bloco(ix) for a, ix in areas.items()}
     res_regioes = {r: bloco(ix) for r, ix in regioes.items()}
     log(f"  áreas e bootstrap prontos ({time.time() - t0:.0f} s)")
@@ -330,6 +350,7 @@ def analisar(E_cel: np.ndarray, datas: pd.DatetimeIndex, cels: list[str], m: pd.
         "faixas": [[n, lo, min(hi, 100)] for n, lo, hi in FAIXAS],
         "sih": {**resumo_sih, "sem_municipio": fora_mun},
         "areas": res_areas, "regioes": res_regioes,
+        "exposicao_alerta": expo_alerta,
         "metodo": {
             "desenho": "série temporal estratificada no tempo: cada dia é comparado com dias do mesmo município, ano, "
                        "mês e dia da semana",
@@ -364,6 +385,11 @@ def texto_resumo(res: dict) -> str:
                       f"RR {a.get('rr')} ({a.get('lo')}-{a.get('hi')}); excesso/ano {a.get('excesso_ano')}".replace(",", "."))
         linhas.append("   faixas: " + "; ".join(f"{f['faixa']} {f['rr']} ({f['lo']}-{f['hi']})" for f in r["faixas"]))
         linhas.append("   defasagens: " + "; ".join(f"L{f['l']} {f['rr']}" for f in r["defasagens"]))
+    ea = res.get("exposicao_alerta")
+    if ea:
+        linhas.append(f"Dias com IVC >= limiar: {ea['dias_ivc_no_limiar']:,} ({ea['pct_com_ehf_positivo']}% com EHF positivo); "
+                      f"dias em alerta: {ea['dias_em_alerta']:,} ({ea['pct_alerta_com_ehf_positivo']}% com EHF positivo "
+                      "na janela)".replace(",", "."))
     return "\n".join(linhas)
 
 
@@ -430,7 +456,10 @@ def main():
         for g, x in meta_d["grupos"].items():
             t, s0 = x["com_clima"]["teste"], x["sem_clima"]["teste"]
             resumo_txt += (f"\nDemanda {g} (teste 2025): D² {t['d2']:.3f} (sem clima {s0['d2']:.3f}); MAE UF-dia {t['uf_dia']['mae']:.1f}; "
-                           f"MAPE UF-dia {t['uf_dia']['mape']:.1f}%; dias altos F1 {t['dias_altos']['f1']:.2f}; "
+                           f"MAPE UF-dia {t['uf_dia']['mape']:.1f}%; r UF-dia {t['uf_dia']['r']:.3f}, "
+                           f"r dentro das UFs {t['uf_dia']['r_intra']:.3f} (sem clima {s0['uf_dia']['r_intra']:.3f}; "
+                           f"UFs {t['uf_dia']['r_intra_min']:.2f}-{t['uf_dia']['r_intra_max']:.2f}); "
+                           f"dias altos F1 {t['dias_altos']['f1']:.2f}; "
                            f"razão nos dias de alerta {t['alerta_razao']:.3f} (sem clima {s0['alerta_razao']:.3f})")
     print(resumo_txt, flush=True)
     aviso_actions(f"Validação {'piloto ' + a.ufs + ' ' + (a.anos or '') if a.ufs else 'Brasil'}", resumo_txt)

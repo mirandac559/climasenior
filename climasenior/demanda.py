@@ -99,9 +99,19 @@ def _metricas(y, p, dia, uf, X3, calib=True) -> dict:
     ok = np.bincount(chave) > 0
     yo, po = yo[ok], po[ok]
     u = (np.flatnonzero(ok) % nuf)
+    # r: todos os pares UF-dia (reflete sobretudo o tamanho das UFs); r_intra: média das correlações
+    # diárias dentro de cada UF (acompanha a variação de um dia para outro)
+    r_uf = []
+    for k in np.unique(u):
+        s = u == k
+        if s.sum() > 2 and yo[s].std() > 0 and po[s].std() > 0:
+            r_uf.append(np.corrcoef(yo[s], po[s])[0, 1])
     out["uf_dia"] = {"mae": float(np.mean(np.abs(yo - po))), "rmse": float(np.sqrt(np.mean((yo - po) ** 2))),
                      "mape": float(np.mean(np.abs(yo - po)[yo > 0] / yo[yo > 0]) * 100),
-                     "r": float(np.corrcoef(yo, po)[0, 1])}
+                     "r": float(np.corrcoef(yo, po)[0, 1]),
+                     "r_intra": float(np.mean(r_uf)) if r_uf else None,
+                     "r_intra_min": float(np.min(r_uf)) if r_uf else None,
+                     "r_intra_max": float(np.max(r_uf)) if r_uf else None}
     # dias de demanda alta (acima do percentil 90 de cada UF): o modelo os antecipa?
     alto_o, alto_p = np.zeros(len(yo), bool), np.zeros(len(yo), bool)
     for k in np.unique(u):
