@@ -10,5 +10,6 @@ Aparelho respiratório: 4.872.606 internações; dias em alerta 1.44%; RR 1.09 (
 Todas as causas clínicas: 27.392.662 internações; dias em alerta 1.44%; RR 1.041 (1.036-1.046); excesso/ano 1571.0
    faixas: BAIXA 1.0 (None-None); MODERADA 1.021 (1.02-1.023); ALTA 1.064 (1.056-1.072); MUITO ALTA 1.054 (1.004-1.106)
    defasagens: L0 1.032; L1 1.042; L2 1.047; L3 1.038; L4 1.029; L5 1.022; L6 1.014; L7 1.007
-Demanda todas (teste 2025): D² 0.780 (sem clima 0.780); MAE UF-dia 22.2; MAPE UF-dia 14.1%; dias altos F1 0.32; razão nos dias de alerta 0.994 (sem clima 1.004)
-Demanda calor (teste 2025): D² 0.526 (sem clima 0.526); MAE UF-dia 4.2; MAPE UF-dia 29.7%; dias altos F1 0.21; razão nos dias de alerta 0.982 (sem clima 1.079)
+Dias com IVC >= limiar: 199.970 (97.7% com EHF positivo); dias em alerta: 351.465 (98.1% com EHF positivo na janela)
+Demanda todas (teste 2025): D² 0.780 (sem clima 0.780); MAE UF-dia 22.2; MAPE UF-dia 14.1%; r UF-dia 0.994, r dentro das UFs 0.693 (sem clima 0.689; UFs 0.15-0.91); dias altos F1 0.32; razão nos dias de alerta 0.994 (sem clima 1.004)
+Demanda calor (teste 2025): D² 0.526 (sem clima 0.526); MAE UF-dia 4.2; MAPE UF-dia 29.7%; r UF-dia 0.987, r dentro das UFs 0.308 (sem clima 0.304; UFs -0.01-0.69); dias altos F1 0.21; razão nos dias de alerta 0.982 (sem clima 1.079)
