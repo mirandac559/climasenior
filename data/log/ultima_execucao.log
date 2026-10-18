@@ -1,2 +1,13 @@
 [ClimaSênior 1.0.0 · Brasil] referência 2026-10-18 | modo real | orçamento 4500 chamadas
-  nada pendente
+[1/5] Território e população
+[2/5] Climatologia e células
+[3/5] Observação CPC do ano corrente
+  CPC 2026 atualizada (Sat, 17 Oct 2026 15:41:55 GMT)
+    CPC tmax 2026
+    CPC tmin 2026
+    289 dias, até 2026-10-16
+[4/5] Modelo: previsão, lacunas e desvio
+  previsão de 7 dias e 7 dias anteriores: 1446 células
+[5/5] EHF, IVC e painel
+  295 dias no painel | hoje: 463 municípios com IVC >= 60; IVC máximo 85
+  chamadas restantes: 3054
