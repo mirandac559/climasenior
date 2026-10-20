@@ -1,2 +1,9 @@
 [ClimaSênior 1.0.0 · Brasil] referência 2026-10-20 | modo real | orçamento 4500 chamadas
-  nada pendente
+[1/5] Território e população
+[2/5] Climatologia e células
+[3/5] Observação CPC do ano corrente
+[4/5] Modelo: previsão, lacunas e desvio
+  previsão de 7 dias e 7 dias anteriores: 1446 células
+[5/5] EHF, IVC e painel
+  297 dias no painel | hoje: 515 municípios com IVC >= 60; IVC máximo 84
+  chamadas restantes: 3054
