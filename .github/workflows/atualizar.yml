@@ -34,6 +34,8 @@ jobs:
       alterou: ${{ steps.resultado.outputs.alterou }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}   # o main de agora, não o do momento em que a execução entrou na fila
 
       - uses: actions/setup-python@v6
         with:
@@ -61,7 +63,7 @@ jobs:
           git config user.email "climasenior-bot@users.noreply.github.com"
           git add data/
           git diff --cached --quiet || git commit -q -m "Atualização $(TZ=America/Sao_Paulo date '+%F %H:%M')"
-          git pull -q --rebase && git push
+          bash scripts/enviar_commit.sh
 
       - id: resultado
         run: echo "alterou=$([ -f .sem_alteracoes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
