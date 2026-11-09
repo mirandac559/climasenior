@@ -1,12 +1,13 @@
 name: Atualizar ClimaSênior
 
-# 06:00 de Brasília (09:00 UTC): atualização completa, com a previsão do dia.
-# A cada 2 horas: completa lacunas pendentes (sai em segundos quando não há nada a fazer).
+# De hora em hora, no minuto 17: a primeira execução depois das 06:00 de Brasília faz a atualização
+# completa, com a previsão do dia; as demais só completam lacunas pendentes (saem em segundos quando
+# não há nada a fazer). O GitHub atrasa e descarta execuções agendadas, sobretudo na virada da hora,
+# por isso não há um horário fixo para a atualização completa: quem chega primeiro depois das 6h a faz.
 # Mudança no painel ou no cálculo: republica com os dados já gravados, sem consultar as fontes.
 on:
   schedule:
-    - cron: "0 9 * * *"
-    - cron: "30 */2 * * *"
+    - cron: "17 * * * *"
   push:
     branches: [main]
     paths: ["site/index.html", "climasenior/brasil.py"]
@@ -32,9 +33,9 @@ jobs:
     outputs:
       alterou: ${{ steps.resultado.outputs.alterou }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -47,7 +48,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.modo }}" = "painel" ]; then
             python -m climasenior.brasil --painel
-          elif [ "${{ github.event.schedule }}" = "30 */2 * * *" ] || [ "${{ inputs.modo }}" = "complemento" ]; then
+          elif [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.modo }}" = "complemento" ]; then
             python -m climasenior.brasil --complemento
           else
             python -m climasenior.brasil
@@ -66,7 +67,7 @@ jobs:
         run: echo "alterou=$([ -f .sem_alteracoes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
 
       - if: steps.resultado.outputs.alterou == 'true'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -78,6 +79,6 @@ jobs:
       name: github-pages
       url: ${{ steps.publicacao.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - id: publicacao
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

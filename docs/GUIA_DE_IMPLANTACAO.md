@@ -28,7 +28,7 @@ e climatologia (cerca de 15 minutos). Depois, cada execução diária leva pouco
 
 | Fluxo | Quando roda | O que faz |
 |---|---|---|
-| Atualizar ClimaSênior | 06:00 de Brasília (completo), a cada 2 h (lacunas) e a cada mudança no painel | temperatura observada e prevista, IVC, internações previstas, publicação do painel |
+| Atualizar ClimaSênior | de hora em hora, no minuto 17: a primeira execução depois das 06:00 de Brasília é completa, as demais completam lacunas; e a cada mudança no painel | temperatura observada e prevista, IVC, internações previstas, publicação do painel |
 | Atualizar capacidade de resposta (CNES) | 15 de fevereiro, ou à mão | equipes da atenção primária por município |
 | Validação retrospectiva | à mão | baixa o SIH (cerca de 1h20), refaz a validação e retreina o modelo de demanda |
 | Testes | a cada mudança no código | testes automáticos, sem acesso à rede |

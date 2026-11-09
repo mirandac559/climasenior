@@ -78,7 +78,8 @@ Validação mostra o efeito de cada limiar.
    do Open-Meteo.
 4. A exposição, o IVC, as internações previstas e os arquivos do painel são recalculados.
 
-Tudo roda no GitHub Actions: completo às 06:00 de Brasília e complementos a cada 2 horas. O
+Tudo roda no GitHub Actions, de hora em hora: a primeira execução depois das 06:00 de Brasília é
+completa, e as demais só completam lacunas. O
 painel é publicado no GitHub Pages. O consumo do Open-Meteo fica abaixo de 10.000 chamadas por
 dia.
 

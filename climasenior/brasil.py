@@ -53,6 +53,7 @@ UF_NOME = {"RO": "Rondônia", "AC": "Acre", "AM": "Amazonas", "RR": "Roraima", "
 ANOS_CLIMATOLOGIA = list(range(2014, 2026))
 ORCAMENTO = int(os.environ.get("CLIMASENIOR_ORCAMENTO", "4500"))   # chamadas Open-Meteo por execução
 LIMITE_DIARIO = int(os.environ.get("CLIMASENIOR_LIMITE_DIARIO", "9500"))  # abaixo das 10.000 diárias gratuitas
+HORA_PREVISAO = 6   # hora de Brasília a partir da qual a previsão do dia deve estar no painel
 DIAS_PASSADOS = 7
 DIAS_FUTUROS = 7
 PRIORIDADE_FONTE = {"cpc": 0, "modelo": 1}
@@ -674,10 +675,13 @@ def exportar(r: dict, cel: pd.DataFrame, m: pd.DataFrame, P: Pastas, hoje: date,
 # =============================================================================
 def executar(cliente=None, hoje: date | None = None, modo="real", complemento=False, orcamento=None,
              base: Path | None = None, site: Path | None = None, pausa=10.5, verbose=True,
-             so_painel=False) -> dict:
+             so_painel=False, agora: datetime | None = None) -> dict:
     """
     so_painel: recalcula e reexporta o painel com os dados já gravados, sem consultar nenhuma
     fonte (útil quando muda só o painel ou o cálculo).
+    complemento: execução extra, que só completa lacunas e desvio. Se já passou das HORA_PREVISAO
+    (Brasília) e a previsão do dia ainda não foi obtida, vira atualização completa. Assim o painel
+    não depende de uma execução agendada num horário fixo, que o GitHub atrasa ou descarta.
     """
     P = Pastas(base or C.DIR_DADOS, site or C.DIR_SITE_DADOS)
     linhas_log = []
@@ -689,7 +693,9 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
             print(s, flush=True)
 
     cliente = cliente or F.ClienteHTTP()
-    hoje = hoje or datetime.now(timezone(timedelta(hours=-3))).date()
+    brt = timezone(timedelta(hours=-3))
+    agora = agora or datetime.now(brt)
+    hoje = hoje or agora.astimezone(brt).date()
     uso = _ler_json(P.ref / "uso_api.json") or {}
     usado = uso.get("chamadas", 0) if uso.get("data") == hoje.isoformat() else 0
     orc = [max(0, min(orcamento if orcamento is not None else ORCAMENTO, LIMITE_DIARIO - usado))]
@@ -698,9 +704,14 @@ def executar(cliente=None, hoje: date | None = None, modo="real", complemento=Fa
     log(f"[ClimaSênior {__version__} · Brasil] referência {hoje} | modo {modo} | "
         + ("só painel, sem consultas" if so_painel else f"orçamento {orc[0]} chamadas"))
     try:
-        if complemento:   # execuções extras: só completam lacunas e desvio; a previsão é da execução diária
-            p = _ler_json(P.ref / "pendencias.json")
-            if not p or (not p.get("celula_dias_faltando") and not p.get("celulas_sem_vies")):
+        if complemento:   # execuções extras: só completam lacunas e desvio, salvo se falta a previsão do dia
+            p = _ler_json(P.ref / "pendencias.json") or {}
+            hora_previsao = datetime.combine(hoje, datetime.min.time(), brt) + timedelta(hours=HORA_PREVISAO)
+            if p.get("previsao_em") != hoje.isoformat() and agora >= hora_previsao:
+                log(f"  previsão de {hoje} ainda não obtida (última: {p.get('previsao_em') or 'nenhuma'}): "
+                    "atualização completa")
+                complemento = False
+            elif not p.get("celula_dias_faltando") and not p.get("celulas_sem_vies"):
                 log("  nada pendente")
                 return {"alterou": False}
         log("[1/5] Território e população")

@@ -75,6 +75,23 @@ def test_orcamento_curto_completa_depois(pastas):
     assert r3["alterou"] is False                                    # nada mais a fazer
 
 
+def test_complemento_busca_previsao_do_dia_se_atrasada(pastas):
+    """O GitHub atrasa ou descarta execuções agendadas: a primeira execução extra depois das 6h
+    (Brasília) de um dia sem previsão faz a atualização completa."""
+    from datetime import datetime, timedelta, timezone
+    brt = timezone(timedelta(hours=-3))
+    base, _ = pastas
+    _rodar(pastas, date(2026, 10, 12))
+    pend = lambda: json.loads((base / "ref" / "pendencias.json").read_text(encoding="utf-8"))  # noqa: E731
+    assert pend()["previsao_em"] == "2026-10-12"
+    cedo = _rodar(pastas, date(2026, 10, 13), complemento=True, agora=datetime(2026, 10, 13, 3, 55, tzinfo=brt))
+    assert cedo["alterou"] is False and pend()["previsao_em"] == "2026-10-12"   # antes das 6h, espera
+    tarde = _rodar(pastas, date(2026, 10, 13), complemento=True, agora=datetime(2026, 10, 13, 9, 17, tzinfo=brt))
+    assert tarde["alterou"] is True and pend()["previsao_em"] == "2026-10-13"   # atualização completa
+    de_novo = _rodar(pastas, date(2026, 10, 13), complemento=True, agora=datetime(2026, 10, 13, 10, 17, tzinfo=brt))
+    assert de_novo["alterou"] is False                                          # uma vez por dia
+
+
 def test_virada_de_ano_e_cpc_nova(pastas):
     _rodar(pastas, date(2026, 10, 12))
     r = _rodar(pastas, date(2027, 1, 5))

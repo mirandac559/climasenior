@@ -1,8 +1,8 @@
 # Manual do usuário
 
 Painel: **https://mirandac559.github.io/climasenior/**. Funciona em qualquer navegador, no
-computador e no celular, sem cadastro. Os dados se atualizam sozinhos todos os dias às 06:00 de
-Brasília.
+computador e no celular, sem cadastro. Os dados se atualizam sozinhos todos os dias, a partir das
+06:00 de Brasília (em geral até as 07:30, conforme a fila de execuções do GitHub).
 
 ## Controles (topo)
 
