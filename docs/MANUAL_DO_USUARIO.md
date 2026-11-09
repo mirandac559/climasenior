@@ -9,7 +9,7 @@ computador e no celular, sem cadastro. Os dados se atualizam sozinhos todos os d
 | Controle | O que faz |
 |---|---|
 | **Data de referência** | Escolhe o dia. Vai de 1º de janeiro de 2026 até o último dia da previsão. Ao lado da data aparece a origem do dado: observado (NOAA), modelo dos dias recentes ou previsão. |
-| **Limiar de ação** | IVC a partir do qual um município conta como "em alerta" (padrão 60). Mudá-lo recalcula os indicadores, a tabela e o protocolo. |
+| **Limiar de ação** | IVC a partir do qual um município conta como "em alerta" (padrão 60). Mudá-lo recalcula os indicadores, o mapa, a tabela e o protocolo. |
 | **Área** | Brasil ou um estado. Indicadores, mapa, tabela e validação passam a ser da área escolhida. |
 | **Município** | Digite o nome e escolha na lista. Os indicadores passam a ser do município. Para voltar à área, apague o campo ou clique em "Ver …" acima dos indicadores. |
 
@@ -35,8 +35,11 @@ computador e no celular, sem cadastro. Os dados se atualizam sozinhos todos os d
 
 ## Abas
 
-**Situação.** O mapa mostra cada município na cor da sua faixa. Passe o mouse para ver os
-detalhes e clique para abrir a série temporal. A tabela traz os 150 municípios de maior IVC.
+**Situação.** No mapa, os municípios que atingem o limiar de ação aparecem na cor da sua faixa, e
+os demais ficam esmaecidos; a legenda abaixo do mapa informa quantos estão em alerta. Passe o mouse
+para ver os detalhes e clique para abrir a série temporal. A tabela traz os municípios com IVC igual
+ou acima do limiar, do maior para o menor (até 150); se nenhum atinge o limiar, ela informa o maior
+IVC da data.
 **Baixar CSV** salva os dados do dia de todos os municípios da área (separador ";", abre no Excel).
 
 **Série temporal.** Para o município escolhido, mostra:

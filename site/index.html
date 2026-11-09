@@ -119,6 +119,7 @@ tr.atual td{background:var(--realce-forte);font-weight:600}
 td small{color:var(--muted);font-weight:400}
 .legenda{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
 .legenda i{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+td.vazio-tab{color:var(--muted);text-align:center;padding:18px 8px;white-space:normal}
 .metodo{margin:0;padding-left:18px;font-size:13px;display:grid;gap:6px;max-width:100ch}
 .metodo b{color:var(--ink)}
 .frase{font-size:15px;line-height:1.55;margin:10px 0 4px;max-width:90ch;text-wrap:pretty}
@@ -173,8 +174,9 @@ td small{color:var(--muted);font-weight:400}
     <div class="grid2">
       <div class="card">
         <h3>Mapa de situação</h3>
-        <div class="sub">Cada ponto é um município, na cor da faixa do IVC. Passe o mouse para detalhes; clique para abrir a série temporal.</div>
-        <div class="mapa-wrap"><canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC"></canvas></div>
+        <div class="sub">Cada ponto é um município. Os que atingem o limiar de ação aparecem na cor da faixa do IVC; os demais ficam esmaecidos. Passe o mouse para detalhes; clique para abrir a série temporal.</div>
+        <div class="mapa-wrap"><canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC, com destaque para os que atingem o limiar de ação"></canvas></div>
+        <div class="legenda" id="legMapa"></div>
       </div>
       <div class="card">
         <div class="cab-card"><h3>Painel de situação</h3><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
@@ -427,10 +429,17 @@ function baixarCsv(){
 }
 
 function tabela(vals, d){
-  const ord = vals.filter(x => x.ivc != null).sort((a,b) => b.ivc - a.ivc || (MUN.pop60[b.i]||0) - (MUN.pop60[a.i]||0));
+  // municípios que atingem o limiar de ação escolhido, do maior para o menor IVC
+  const com = vals.filter(x => x.ivc != null);
+  const ord = com.filter(x => x.ivc >= lim).sort((a,b) => b.ivc - a.ivc || (MUN.pop60[b.i]||0) - (MUN.pop60[a.i]||0));
   const top = ord.slice(0, 150);
-  $("tabData").textContent = `${dataBR(d)} · ${rotuloArea()} · ${ord.length > top.length ? `150 maiores de ${fmt(ord.length)}` : `${fmt(ord.length)} municípios`}, ordenados pelo IVC. Dias: dias seguidos com onda de calor.`;
-  $("tab").querySelector("tbody").innerHTML = top.map(x => `<tr data-i="${x.i}"${x.i === sel ? ' class="sel"' : ""}><td>${MUN.nome[x.i]}</td><td>${MUN.uf[x.i]}</td><td class="n"><b>${fmt(x.ivc)}</b></td><td>${pill(x.ivc)}</td><td class="n">${fmt(x.tmax,1)}</td><td class="n">${fmt(x.dc)}</td></tr>`).join("");
+  const mx = com.reduce((a,b) => (b.ivc > (a?.ivc ?? -1) ? b : a), null);
+  $("tabData").textContent = ord.length
+    ? `${dataBR(d)} · ${rotuloArea()} · ${ord.length > top.length ? `150 maiores de ${fmt(ord.length)}` : fmt(ord.length)} município${ord.length > 1 ? "s" : ""} com IVC ≥ ${lim} (limiar de ação), ordenados pelo IVC. Dias: dias seguidos com onda de calor.`
+    : `${dataBR(d)} · ${rotuloArea()} · nenhum município com IVC ≥ ${lim} (limiar de ação).`;
+  $("tab").querySelector("tbody").innerHTML = top.length
+    ? top.map(x => `<tr data-i="${x.i}"${x.i === sel ? ' class="sel"' : ""}><td>${MUN.nome[x.i]}</td><td>${MUN.uf[x.i]}</td><td class="n"><b>${fmt(x.ivc)}</b></td><td>${pill(x.ivc)}</td><td class="n">${fmt(x.tmax,1)}</td><td class="n">${fmt(x.dc)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="vazio-tab">Nenhum município atinge o limiar ${lim} nesta data${mx ? `. O maior IVC é ${fmt(mx.ivc)}, em ${MUN.nome[mx.i]} (${MUN.uf[mx.i]})` : ""}. Reduza o limiar para ver mais municípios.</td></tr>`;
 }
 
 // ------------------------------------------------------------------ mapa
@@ -460,13 +469,22 @@ function desenharMapa(D){
   }
   const n = idxArea.length, raio = n > 2000 ? 2.1 : n > 400 ? 3.2 : n > 60 ? 4.5 : 7;
   pontos = [];
-  const ordem = idxArea.slice().sort((a,b) => (D.ivc[a] ?? -1) - (D.ivc[b] ?? -1));
+  // os municípios no limiar de ação são desenhados por último, por cima dos demais
+  const noLimiar = i => D.ivc[i] != null && D.ivc[i] >= lim;
+  const ordem = idxArea.slice().sort((a,b) => (noLimiar(a) - noLimiar(b)) || (D.ivc[a] ?? -1) - (D.ivc[b] ?? -1));
+  let nAlerta = 0;
   for(const i of ordem){
     if(MUN.lat[i]==null) continue;
-    const [x,y] = mapa.proj(MUN.lat[i], MUN.lon[i]);
-    g.fillStyle = corIVC(D.ivc[i]); g.beginPath(); g.arc(x,y,raio,0,6.283); g.fill();
+    const [x,y] = mapa.proj(MUN.lat[i], MUN.lon[i]), ativo = noLimiar(i);
+    g.globalAlpha = ativo || D.ivc[i] == null ? 1 : 0.22;
+    g.fillStyle = corIVC(D.ivc[i]); g.beginPath(); g.arc(x,y,ativo ? raio * 1.25 : raio,0,6.283); g.fill();
+    if(ativo) nAlerta++;
     pontos.push([x,y,i]);
   }
+  g.globalAlpha = 1;
+  const presentes = new Set(idxArea.filter(noLimiar).map(i => faixa(D.ivc[i]).r));
+  $("legMapa").innerHTML = FAIXAS.filter(f => f.ate >= lim).map(f => `<span${presentes.has(f.r) ? "" : ' style="opacity:.55"'}><i style="background:var(${f.v})"></i>${f.r.charAt(0) + f.r.slice(1).toLowerCase()} (${Math.max(f.de, lim)} a ${f.ate})</span>`).join("")
+    + `<span><i style="background:linear-gradient(90deg,var(--baixa),var(--moderada),var(--alta));opacity:.3"></i>Abaixo do limiar ${lim}</span><span><b style="color:var(--ink)">${fmt(nAlerta)}</b> em alerta</span>`;
   if(sel != null && MUN.lat[sel] != null && idxArea.includes(sel)){
     const [x,y] = mapa.proj(MUN.lat[sel], MUN.lon[sel]);
     g.strokeStyle = css("--ink"); g.lineWidth = 2; g.beginPath(); g.arc(x,y,raio+4,0,6.283); g.stroke();
@@ -803,7 +821,7 @@ async function iniciar(){
   $("mapa").addEventListener("mousemove", ev => {
     const i = maisProximo(ev); if(i == null){ tip.style.display = "none"; return; }
     const D = DIAS[META.dias[dia][0]], c = MUN.cel[i];
-    tip.innerHTML = `<b>${MUN.nome[i]} (${MUN.uf[i]})</b><br>IVC ${fmt(D.ivc[i])} · ${faixa(D.ivc[i])?.r || "sem dado"}<br>Tmáx ${c >= 0 ? fmt(D.tmax[c],1) : "–"} °C · ${c >= 0 && D.dc[c] ? `${D.dc[c]} dia(s) de onda de calor` : "sem onda de calor"}<br>60+: ${fmt(MUN.pop60[i])} pessoas${D.dem && D.dem[i] != null ? `<br>Internações previstas: ${fmt(D.dem[i] / 100, 1)} por dia` : ""}`;
+    tip.innerHTML = `<b>${MUN.nome[i]} (${MUN.uf[i]})</b><br>IVC ${fmt(D.ivc[i])} · ${faixa(D.ivc[i])?.r || "sem dado"}${D.ivc[i] != null ? (D.ivc[i] >= lim ? ` · <b>acima do limiar ${lim}</b>` : ` · abaixo do limiar ${lim}`) : ""}<br>Tmáx ${c >= 0 ? fmt(D.tmax[c],1) : "–"} °C · ${c >= 0 && D.dc[c] ? `${D.dc[c]} dia(s) de onda de calor` : "sem onda de calor"}<br>60+: ${fmt(MUN.pop60[i])} pessoas${D.dem && D.dem[i] != null ? `<br>Internações previstas: ${fmt(D.dem[i] / 100, 1)} por dia` : ""}`;
     tip.style.display = "block"; tip.style.left = Math.min(ev.clientX + 14, innerWidth - 290) + "px"; tip.style.top = (ev.clientY + 14) + "px";
   });
   $("mapa").addEventListener("mouseleave", () => tip.style.display = "none");
