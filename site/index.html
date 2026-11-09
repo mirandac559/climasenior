@@ -142,6 +142,22 @@ td small{color:var(--muted);font-weight:400}
 .legenda{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
 .legenda i{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
 td.vazio-tab{color:var(--muted);text-align:center;padding:18px 8px;white-space:normal}
+/* resumo do limiar no painel de situação: muda a cada ajuste do limiar */
+.resumo-lim{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;display:grid;gap:8px}
+.resumo-lim.mudou{animation:realce .7s ease-out}
+@keyframes realce{from{background:var(--realce-forte)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.resumo-lim.mudou{animation:none}}
+.rl-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rl-num{font-size:26px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
+.rl-txt{font-size:13px;color:var(--ink)}
+.rl-txt small{display:block;color:var(--muted);font-size:12px}
+.rl-faixas,.rl-ufs{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted);align-items:center}
+.rl-faixas span{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.rl-faixas i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.rl-faixas b,.rl-ufs b{color:var(--ink)}
+.rl-ufs{gap:4px 6px}
+.rl-ufs button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:2px 9px;cursor:pointer;font-variant-numeric:tabular-nums}
+.rl-ufs button:hover,.rl-ufs button:focus-visible{border-color:var(--azul);outline:none}
 .metodo{margin:0;padding-left:18px;font-size:13px;display:grid;gap:6px;max-width:100ch}
 .metodo b{color:var(--ink)}
 .frase{font-size:15px;line-height:1.55;margin:10px 0 4px;max-width:90ch;text-wrap:pretty}
@@ -213,6 +229,7 @@ td.vazio-tab{color:var(--muted);text-align:center;padding:18px 8px;white-space:n
       </div>
       <div class="card">
         <div class="cab-card"><h3>Painel de situação</h3><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
+        <div class="resumo-lim" id="resumoLim" aria-live="polite"></div>
         <div class="sub" id="tabData"></div>
         <div class="tbl-wrap"><table id="tab"><thead><tr><th>Município</th><th>UF</th><th class="n">IVC</th><th>Faixa</th><th class="n">Tmáx</th><th class="n">Dias</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -467,12 +484,42 @@ function tabela(vals, d){
   const ord = com.filter(x => x.ivc >= lim).sort((a,b) => b.ivc - a.ivc || (MUN.pop60[b.i]||0) - (MUN.pop60[a.i]||0));
   const top = ord.slice(0, 150);
   const mx = com.reduce((a,b) => (b.ivc > (a?.ivc ?? -1) ? b : a), null);
+  resumoLimiar(ord, com, d, mx);
   $("tabData").textContent = ord.length
-    ? `${dataBR(d)} · ${rotuloArea()} · ${ord.length > top.length ? `150 maiores de ${fmt(ord.length)}` : fmt(ord.length)} município${ord.length > 1 ? "s" : ""} com IVC ≥ ${lim} (limiar de ação), ordenados pelo IVC. Dias: dias seguidos com onda de calor.`
-    : `${dataBR(d)} · ${rotuloArea()} · nenhum município com IVC ≥ ${lim} (limiar de ação).`;
+    ? `Municípios com IVC ≥ ${lim}, do maior para o menor${ord.length > top.length ? ` (os 150 primeiros de ${fmt(ord.length)})` : ""}. Dias: dias seguidos com onda de calor.`
+    : "";
   $("tab").querySelector("tbody").innerHTML = top.length
     ? top.map(x => `<tr data-i="${x.i}"${x.i === sel ? ' class="sel"' : ""}><td>${MUN.nome[x.i]}</td><td>${MUN.uf[x.i]}</td><td class="n"><b>${fmt(x.ivc)}</b></td><td>${pill(x.ivc)}</td><td class="n">${fmt(x.tmax,1)}</td><td class="n">${fmt(x.dc)}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="vazio-tab">Nenhum município atinge o limiar ${lim} nesta data${mx ? `. O maior IVC é ${fmt(mx.ivc)}, em ${MUN.nome[mx.i]} (${MUN.uf[mx.i]})` : ""}. Reduza o limiar para ver mais municípios.</td></tr>`;
+    : `<tr><td colspan="6" class="vazio-tab">Nenhum município atinge o limiar ${lim} nesta data. Reduza o limiar para ver mais municípios.</td></tr>`;
+}
+
+// resumo do limiar: quantos em alerta, por faixa e por estado (ou parcela do estado)
+let resumoAnterior = "";
+function resumoLimiar(ord, com, d, mx){
+  const pop = ord.reduce((s, x) => s + (MUN.pop60[x.i] || 0), 0);
+  const nome = f => f.r.charAt(0) + f.r.slice(1).toLowerCase();
+  const porFaixa = FAIXAS.slice().reverse().filter(f => f.ate >= lim)
+    .map(f => `<span><i style="background:var(${f.v})"></i>${nome(f)} <b>${fmt(ord.filter(x => faixa(x.ivc) === f).length)}</b></span>`).join("");
+  let extra;
+  if(area === "BR"){
+    const cont = {};
+    for(const x of ord) cont[MUN.uf[x.i]] = (cont[MUN.uf[x.i]] || 0) + 1;
+    const ufs = Object.entries(cont).sort((a,b) => b[1] - a[1]);
+    extra = ufs.length
+      ? `<span>${ufs.length} estado${ufs.length > 1 ? "s" : ""}:</span>` + ufs.slice(0, 12).map(([u, n]) => `<button type="button" data-uf="${u}" title="Ver ${UF_NOME[u] || u}">${u} <b>${fmt(n)}</b></button>`).join("")
+        + (ufs.length > 12 ? `<span>e mais ${ufs.length - 12}</span>` : "")
+      : "";
+  } else {
+    extra = com.length > 1 ? `<span><b>${fmt(100 * ord.length / com.length, 0)}%</b> dos ${fmt(com.length)} municípios da UF</span>` : "";
+  }
+  const html = `<div class="rl-cab"><span class="rl-num">${fmt(ord.length)}</span><span class="rl-txt">município${ord.length === 1 ? "" : "s"} em alerta (IVC ≥ ${lim}) em ${dataBR(d)}<small>${ord.length ? `${fmt(pop)} pessoas com 60 anos ou mais vivem neles · ${rotuloArea()}` : `${rotuloArea()}${mx ? ` · maior IVC na data: ${fmt(mx.ivc)}, em ${MUN.nome[mx.i]} (${MUN.uf[mx.i]})` : ""}`}</small></span></div>`
+    + (ord.length ? `<div class="rl-faixas">${porFaixa}</div>` : "")
+    + (extra ? `<div class="rl-ufs">${extra}</div>` : "");
+  const el = $("resumoLim");
+  el.innerHTML = html;
+  const chave = `${lim}|${area}|${d}`;
+  if(resumoAnterior && resumoAnterior !== chave){ el.classList.remove("mudou"); void el.offsetWidth; el.classList.add("mudou"); }
+  resumoAnterior = chave;
 }
 
 // ------------------------------------------------------------------ mapa
@@ -864,7 +911,9 @@ async function iniciar(){
   });
   let pendente = null;
   $("dia").oninput = e => { dia = +e.target.value; clearTimeout(pendente); pendente = setTimeout(() => { atualizar(); if($("p2").classList.contains("on")) serie(); }, 120); };
-  $("lim").oninput = e => { lim = +e.target.value; $("limTxt").textContent = lim; atualizar(); if($("p2").classList.contains("on")) serie(); };
+  $("lim").oninput = e => { lim = +e.target.value; $("limTxt").textContent = lim; $("tab").parentElement.scrollTop = 0; atualizar(); if($("p2").classList.contains("on")) serie(); };
+  $("resumoLim").addEventListener("click", e => { const b = e.target.closest("button[data-uf]"); if(!b) return;
+    $("area").value = b.dataset.uf; $("area").dispatchEvent(new Event("change")); });
   $("area").onchange = e => {
     area = e.target.value; idxArea = municipiosDaArea(); listaMunicipios();
     if(sel != null && area !== "BR" && MUN.uf[sel] !== area){ sel = null; $("busca").value = ""; }

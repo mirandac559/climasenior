@@ -40,8 +40,11 @@ os demais ficam esmaecidos. A legenda das cores e a rosa dos ventos ficam sobre 
 cantos com menos municípios (no celular, a legenda desce para baixo do mapa); a legenda informa
 também quantos municípios estão em alerta. Passe o mouse
 para ver os detalhes e clique para abrir a série temporal. A tabela traz os municípios com IVC igual
-ou acima do limiar, do maior para o menor (até 150); se nenhum atinge o limiar, ela informa o maior
-IVC da data.
+ou acima do limiar, do maior para o menor (até 150). Acima dela, o resumo do limiar mostra quantos
+municípios estão em alerta, quantas pessoas com 60 anos ou mais vivem neles, a divisão por faixa e,
+no Brasil, por estado (clique num estado para vê-lo); num estado, mostra a parcela dos seus
+municípios em alerta. O resumo muda a cada ajuste do limiar; a lista, por estar ordenada pelo IVC,
+mantém os mesmos municípios no topo e só ganha ou perde linhas no fim.
 **Baixar CSV** salva os dados do dia de todos os municípios da área (separador ";", abre no Excel).
 
 **Série temporal.** Para o município escolhido, mostra:
