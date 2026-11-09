@@ -36,7 +36,9 @@ computador e no celular, sem cadastro. Os dados se atualizam sozinhos todos os d
 ## Abas
 
 **Situação.** No mapa, os municípios que atingem o limiar de ação aparecem na cor da sua faixa, e
-os demais ficam esmaecidos; a legenda abaixo do mapa informa quantos estão em alerta. Passe o mouse
+os demais ficam esmaecidos. A legenda das cores e a rosa dos ventos ficam sobre o mapa, nos
+cantos com menos municípios (no celular, a legenda desce para baixo do mapa); a legenda informa
+também quantos municípios estão em alerta. Passe o mouse
 para ver os detalhes e clique para abrir a série temporal. A tabela traz os municípios com IVC igual
 ou acima do limiar, do maior para o menor (até 150); se nenhum atinge o limiar, ela informa o maior
 IVC da data.

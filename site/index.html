@@ -71,8 +71,30 @@ header p{margin:4px 0 0;font-size:13px;color:var(--muted);text-wrap:balance}
 .grid2 .card+.card{margin-top:0}
 .card h3{margin:0 0 8px;font-size:14px;color:var(--azul-esc)}
 .card .sub{font-size:12px;color:var(--muted);margin:-4px 0 10px}
-.mapa-wrap{position:relative}
+.mapa-wrap{position:relative;container-type:inline-size}
 canvas.mapa{width:100%;display:block;cursor:crosshair}
+/* rosa dos ventos e legenda sobre o mapa; em mapas estreitos a legenda desce para baixo dele */
+.rosa{position:absolute;top:6px;right:6px;width:68px;height:68px;pointer-events:none}
+.rosa .fundo{fill:var(--card);fill-opacity:.88;stroke:var(--contorno);stroke-width:1}
+.rosa .escuro{fill:var(--ink)}
+.rosa .claro{fill:var(--card);stroke:var(--ink);stroke-width:1.2;stroke-linejoin:round}
+.rosa .inter{fill:var(--contorno)}
+.rosa text{fill:var(--ink);font:700 11px Inter,system-ui,sans-serif;text-anchor:middle;dominant-baseline:central}
+.rosa text.n{font-size:13px}
+.leg-mapa{position:absolute;left:6px;bottom:6px;background:var(--card);background:color-mix(in srgb,var(--card) 90%,transparent);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.4;color:var(--ink);pointer-events:none}
+.leg-mapa .t{font-weight:600;margin-bottom:3px}
+.leg-mapa .r{display:flex;align-items:center;gap:7px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.leg-mapa .r i{width:10px;height:10px;border-radius:50%;flex:none}
+.leg-mapa .r.off{color:var(--muted)}
+.leg-mapa .r i.esm{background:linear-gradient(90deg,var(--baixa),var(--moderada),var(--alta));opacity:.35}
+.leg-mapa .tot{margin-top:4px;padding-top:4px;border-top:1px solid var(--line);color:var(--muted)}
+.leg-mapa .tot b{color:var(--ink)}
+@container (max-width:520px){
+  .rosa{width:50px;height:50px}
+  .leg-mapa{position:static;margin-top:8px;background:none;border:none;padding:0;display:flex;flex-wrap:wrap;gap:3px 14px}
+  .leg-mapa .t{width:100%;margin:0}
+  .leg-mapa .tot{border:none;margin:0;padding:0}
+}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--muted);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--card)}
@@ -175,8 +197,19 @@ td.vazio-tab{color:var(--muted);text-align:center;padding:18px 8px;white-space:n
       <div class="card">
         <h3>Mapa de situação</h3>
         <div class="sub">Cada ponto é um município. Os que atingem o limiar de ação aparecem na cor da faixa do IVC; os demais ficam esmaecidos. Passe o mouse para detalhes; clique para abrir a série temporal.</div>
-        <div class="mapa-wrap"><canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC, com destaque para os que atingem o limiar de ação"></canvas></div>
-        <div class="legenda" id="legMapa"></div>
+        <div class="mapa-wrap">
+          <canvas class="mapa" id="mapa" role="img" aria-label="Mapa dos municípios coloridos pelo IVC, com destaque para os que atingem o limiar de ação"></canvas>
+          <svg class="rosa" viewBox="-50 -50 100 100" role="img" aria-label="Rosa dos ventos: norte para cima">
+            <circle class="fundo" r="47"/>
+            <g class="inter"><polygon points="0,-22 3,-3 0,0 -3,-3" transform="rotate(45)"/><polygon points="0,-22 3,-3 0,0 -3,-3" transform="rotate(135)"/><polygon points="0,-22 3,-3 0,0 -3,-3" transform="rotate(225)"/><polygon points="0,-22 3,-3 0,0 -3,-3" transform="rotate(315)"/></g>
+            <g><polygon class="escuro" points="0,-33 0,0 5,-5"/><polygon class="claro" points="0,-33 0,0 -5,-5"/>
+               <polygon class="claro" points="0,-33 0,0 5,-5" transform="rotate(90)"/><polygon class="escuro" points="0,-33 0,0 -5,-5" transform="rotate(90)"/>
+               <polygon class="escuro" points="0,-33 0,0 5,-5" transform="rotate(180)"/><polygon class="claro" points="0,-33 0,0 -5,-5" transform="rotate(180)"/>
+               <polygon class="claro" points="0,-33 0,0 5,-5" transform="rotate(270)"/><polygon class="escuro" points="0,-33 0,0 -5,-5" transform="rotate(270)"/></g>
+            <text class="n" x="0" y="-40">N</text><text x="40" y="1">L</text><text x="0" y="41">S</text><text x="-40" y="1">O</text>
+          </svg>
+          <div class="leg-mapa" id="legMapa" role="group" aria-label="Legenda do mapa"></div>
+        </div>
       </div>
       <div class="card">
         <div class="cab-card"><h3>Painel de situação</h3><button class="botao" id="baixarCsv" type="button">Baixar CSV</button></div>
@@ -479,16 +512,44 @@ function desenharMapa(D){
     g.globalAlpha = ativo || D.ivc[i] == null ? 1 : 0.22;
     g.fillStyle = corIVC(D.ivc[i]); g.beginPath(); g.arc(x,y,ativo ? raio * 1.25 : raio,0,6.283); g.fill();
     if(ativo) nAlerta++;
-    pontos.push([x,y,i]);
+    pontos.push([x,y,i,ativo]);
   }
   g.globalAlpha = 1;
-  const presentes = new Set(idxArea.filter(noLimiar).map(i => faixa(D.ivc[i]).r));
-  $("legMapa").innerHTML = FAIXAS.filter(f => f.ate >= lim).map(f => `<span${presentes.has(f.r) ? "" : ' style="opacity:.55"'}><i style="background:var(${f.v})"></i>${f.r.charAt(0) + f.r.slice(1).toLowerCase()} (${Math.max(f.de, lim)} a ${f.ate})</span>`).join("")
-    + `<span><i style="background:linear-gradient(90deg,var(--baixa),var(--moderada),var(--alta));opacity:.3"></i>Abaixo do limiar ${lim}</span><span><b style="color:var(--ink)">${fmt(nAlerta)}</b> em alerta</span>`;
+  // legenda sobre o mapa: faixas no limiar ou acima (da maior para a menor), os esmaecidos e os sem dado
+  const nome = f => f.r.charAt(0) + f.r.slice(1).toLowerCase();
+  const linhas = FAIXAS.slice().reverse().filter(f => f.ate >= lim)
+    .map(f => `<div class="r"><i style="background:var(${f.v})"></i>${nome(f)} (${Math.max(f.de, lim)} a ${f.ate})</div>`);
+  if(lim > 0) linhas.push(`<div class="r off"><i class="esm"></i>Abaixo do limiar (IVC &lt; ${lim})</div>`);
+  if(idxArea.some(i => D.ivc[i] == null)) linhas.push(`<div class="r off"><i style="background:var(--semdado)"></i>Sem dado</div>`);
+  $("legMapa").innerHTML = `<div class="t">IVC · limiar de ação ${lim}</div>${linhas.join("")}`
+    + `<div class="tot"><b>${fmt(nAlerta)}</b> município${nAlerta === 1 ? "" : "s"} em alerta</div>`;
+  posicionarSobreMapa();
   if(sel != null && MUN.lat[sel] != null && idxArea.includes(sel)){
     const [x,y] = mapa.proj(MUN.lat[sel], MUN.lon[sel]);
     g.strokeStyle = css("--ink"); g.lineWidth = 2; g.beginPath(); g.arc(x,y,raio+4,0,6.283); g.stroke();
   }
+}
+// põe a legenda e a rosa dos ventos nos cantos do mapa que cobrem menos municípios
+// (os em alerta pesam mais); em mapas estreitos a legenda fica abaixo do mapa
+function posicionarSobreMapa(){
+  const leg = $("legMapa"), rosa = document.querySelector(".rosa"), m = 6;
+  const cobertos = (canto, w, h) => {
+    const x0 = canto[1] === "l" ? m : mapa.w - m - w, y0 = canto[0] === "t" ? m : mapa.h - m - h;
+    let n = 0;
+    for(const p of pontos) if(p[0] > x0 - 4 && p[0] < x0 + w + 4 && p[1] > y0 - 4 && p[1] < y0 + h + 4) n += p[3] ? 5 : 1;
+    return n;
+  };
+  const melhor = (cantos, w, h) => cantos.reduce((a, c) => { const n = cobertos(c, w, h); return n < a.n ? {c, n} : a; }, {c: cantos[0], n: Infinity}).c;
+  const pos = (el, canto) => {
+    el.style.top = canto[0] === "t" ? m + "px" : "auto"; el.style.bottom = canto[0] === "b" ? m + "px" : "auto";
+    el.style.left = canto[1] === "l" ? m + "px" : "auto"; el.style.right = canto[1] === "r" ? m + "px" : "auto";
+  };
+  let cantoLeg = null;
+  if(getComputedStyle(leg).position === "absolute"){
+    cantoLeg = melhor(["bl", "br", "tl", "tr"], leg.offsetWidth, leg.offsetHeight);
+    pos(leg, cantoLeg);
+  }
+  pos(rosa, melhor(["tr", "tl", "br", "bl"].filter(c => c !== cantoLeg), rosa.clientWidth || 68, rosa.clientHeight || 68));
 }
 function maisProximo(ev){
   const b = $("mapa").getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top;
