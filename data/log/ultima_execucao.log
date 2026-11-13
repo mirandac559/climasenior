@@ -1,2 +1,15 @@
 [ClimaSênior 1.0.0 · Brasil] referência 2026-11-13 | modo real | orçamento 4500 chamadas
-  nada pendente
+  previsão de 2026-11-13 ainda não obtida (última: 2026-11-12): atualização completa
+[1/5] Território e população
+[2/5] Climatologia e células
+[3/5] Observação CPC do ano corrente
+  CPC 2026 atualizada (Thu, 12 Nov 2026 16:43:02 GMT)
+    CPC tmax 2026
+    CPC tmin 2026
+    315 dias, até 2026-11-11
+[4/5] Modelo: previsão, lacunas e desvio
+  previsão de 7 dias e 7 dias anteriores: 1446 células
+    interrompido: Falha após 4 tentativas: https://api.open-meteo.com/v1/forecast (HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=60))
+[5/5] EHF, IVC e painel
+  317 dias no painel | hoje: 14 municípios com IVC >= 60; IVC máximo 63
+  chamadas restantes: 0
